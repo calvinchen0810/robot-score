@@ -355,7 +355,10 @@
 
         html += '<div class="card">'
           + '<div class="flex justify-between items-center">'
-          + '  <strong>' + esc(t.name) + '</strong>'
+          + '  <div class="flex items-center gap-2">'
+          + '    <strong id="tn_' + t.id + '">' + esc(t.name) + '</strong>'
+          + '    <button class="btn btn-sm" style="background:#e2e8f0;color:#334155;padding:2px 6px;font-size:0.7rem" onclick="renameTeam(' + t.id + ')">✏️</button>'
+          + '  </div>'
           + '  <span style="color:#d97706;font-weight:700">' + total + ' pts</span>'
           + '</div>'
           + rows
@@ -376,6 +379,15 @@
     async function resetTeamScores(tid) {
       if (!confirm('Reset all scores for this team?')) return;
       await api('/api/admin/teams/' + tid + '/scores', { method:'DELETE' });
+      loadScoreTeams();
+    }
+
+    async function renameTeam(tid) {
+      const el = document.getElementById('tn_' + tid);
+      const oldName = el ? el.textContent : '';
+      const newName = prompt('Enter new team name:', oldName);
+      if (!newName || !newName.trim() || newName.trim() === oldName) return;
+      await api('/api/teams/' + tid, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: newName.trim() }) });
       loadScoreTeams();
     }
 

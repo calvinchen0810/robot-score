@@ -7,7 +7,7 @@ from models import Series, Game, Team, ScoreButton, TeamScore
 from schemas import (
     SeriesCreate, SeriesOut,
     GameCreate, GameOut,
-    TeamCreate, TeamOut,
+    TeamCreate, TeamUpdate, TeamOut,
     ScoreButtonCreate, ScoreButtonUpdate, ScoreButtonOut,
     ScoreAction, TeamScoreOut, TeamScoreManual,
 )
@@ -146,6 +146,17 @@ def list_teams(gid: int, db: Session = Depends(get_db)):
 def create_team(data: TeamCreate, db: Session = Depends(get_db)):
     t = Team(name=data.name, game_id=data.game_id)
     db.add(t)
+    db.commit()
+    db.refresh(t)
+    return t
+
+
+@router.put("/teams/{tid}", response_model=TeamOut)
+def update_team(tid: int, data: TeamUpdate, db: Session = Depends(get_db)):
+    t = db.query(Team).get(tid)
+    if not t:
+        raise HTTPException(404, "Team not found")
+    t.name = data.name
     db.commit()
     db.refresh(t)
     return t

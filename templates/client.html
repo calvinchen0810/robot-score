@@ -39,7 +39,10 @@
       <div class="flex justify-between items-center" style="padding:8px 0">
         <div>
           <span class="text-sm text-muted" id="sv_series"></span>
-          <h1 style="text-align:left;padding:0" id="sv_team"></h1>
+          <div class="flex items-center gap-2">
+            <h1 style="text-align:left;padding:0" id="sv_team"></h1>
+            <button class="btn btn-sm" style="background:#e2e8f0;color:#334155;padding:4px 8px;font-size:0.75rem" onclick="renameTeam()">✏️</button>
+          </div>
         </div>
         <div style="text-align:right">
           <div class="text-sm text-muted" id="sv_game"></div>
@@ -221,6 +224,18 @@
       } catch (e) {
         // Max clicks or error – ignore silently
       }
+    }
+
+    async function renameTeam() {
+      const newName = prompt('Enter new team name:', currentTeamName);
+      if (!newName || !newName.trim() || newName.trim() === currentTeamName) return;
+      const t = await api('/api/teams/' + currentTeamId, {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ name: newName.trim() })
+      });
+      currentTeamName = t.name;
+      document.getElementById('sv_team').textContent = t.name;
     }
 
     function leaveTeam() {

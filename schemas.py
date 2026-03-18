@@ -29,6 +29,9 @@ class TeamCreate(BaseModel):
     name: str
     game_id: int
 
+class TeamUpdate(BaseModel):
+    name: str
+
 class TeamOut(BaseModel):
     id: int
     name: str
