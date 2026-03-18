@@ -292,12 +292,30 @@ def get_team_scores(tid: int, db: Session = Depends(get_db)):
         for s in all_scores:
             game_totals[s.button_id] = game_totals.get(s.button_id, 0) + s.clicks
 
-    for r in rows:
-        result[r.button_id] = {
-            "clicks": r.clicks,
-            "points": r.clicks * r.button.points,
-            "game_total": game_totals.get(r.button_id, r.clicks),
-        }
+    team_scores = {r.button_id: r for r in rows}
+
+    # Return data for ALL active buttons, not just ones the team has scored on
+    if team:
+        series_id = db.query(Game).get(team.game_id).series_id
+        all_buttons = (
+            db.query(ScoreButton)
+            .filter(ScoreButton.series_id == series_id, ScoreButton.is_active == True)
+            .all()
+        )
+        for b in all_buttons:
+            ts = team_scores.get(b.id)
+            result[b.id] = {
+                "clicks": ts.clicks if ts else 0,
+                "points": (ts.clicks if ts else 0) * b.points,
+                "game_total": game_totals.get(b.id, 0),
+            }
+    else:
+        for r in rows:
+            result[r.button_id] = {
+                "clicks": r.clicks,
+                "points": r.clicks * r.button.points,
+                "game_total": game_totals.get(r.button_id, r.clicks),
+            }
     return result
 
 

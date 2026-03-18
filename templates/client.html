@@ -46,7 +46,7 @@
         </div>
         <div style="text-align:right">
           <div class="text-sm text-muted" id="sv_game"></div>
-          <div style="font-size:1.6rem;font-weight:800;color:#d97706" id="sv_total">0</div>
+          <div style="font-size:2.8rem;font-weight:800;color:#d97706" id="sv_total">0</div>
         </div>
       </div>
       <div class="score-grid" id="buttonGrid"></div>
@@ -65,6 +65,7 @@
 
     async function api(url, opts) {
       const r = await fetch(url, opts);
+      if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
       return r.json();
     }
 
@@ -137,11 +138,21 @@
       try {
         const d = await api('/api/active');
         const newStatus = d.game?.status || 'stopped';
+        // Update button config in case admin changed max limits
+        if (d.buttons) gameData.buttons = d.buttons;
         if (newStatus !== gameStatus) {
           gameStatus = newStatus;
-          renderButtons();
           updateStatusBanner();
         }
+        // Always refresh scores from server (other teams may have scored)
+        if (currentTeamId) {
+          const scores = await api('/api/teams/' + currentTeamId + '/scores');
+          gameData.buttons.forEach(b => {
+            clickState[b.id] = scores[b.id]?.clicks || 0;
+            gameTotalState[b.id] = scores[b.id]?.game_total || 0;
+          });
+        }
+        renderButtons();
       } catch(e) {}
     }
 
