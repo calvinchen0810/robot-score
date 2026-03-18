@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Robot Score – Play</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="container" id="app">
+    <!-- Step 1: Join / Create team -->
+    <div id="joinView">
+      <h1>🤖 Robot Score</h1>
+      <div class="card" id="loadingMsg">
+        <p class="text-center text-muted">Loading game…</p>
+      </div>
+      <div class="card" id="noGame" style="display:none">
+        <p class="text-center text-muted">No active game right now. Please wait for admin to start one.</p>
+      </div>
+      <div id="gameReady" style="display:none">
+        <div class="card">
+          <p class="text-sm text-muted" id="seriesLabel"></p>
+          <h2 id="gameLabel" style="margin:0"></h2>
+        </div>
+        <div class="card">
+          <label>Your Team Name</label>
+          <input type="text" id="teamNameInput" placeholder="Enter team name…">
+          <button class="btn btn-primary btn-block mt-2" onclick="joinOrCreate()">Join Game</button>
+        </div>
+        <div id="existingTeams" class="card" style="display:none">
+          <h3>Existing Teams (tap to rejoin)</h3>
+          <div id="teamList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Score control -->
+    <div id="scoreView" style="display:none">
+      <div class="flex justify-between items-center" style="padding:8px 0">
+        <div>
+          <span class="text-sm text-muted" id="sv_series"></span>
+          <h1 style="text-align:left;padding:0" id="sv_team"></h1>
+        </div>
+        <div style="text-align:right">
+          <div class="text-sm text-muted" id="sv_game"></div>
+          <div style="font-size:1.6rem;font-weight:800;color:#d97706" id="sv_total">0</div>
+        </div>
+      </div>
+      <div class="score-grid" id="buttonGrid"></div>
+      <div id="gameStatusBanner" style="display:none;text-align:center;padding:12px;border-radius:8px;margin:8px 0;font-weight:700"></div>
+      <button class="btn btn-warning btn-sm btn-block mt-4" onclick="leaveTeam()">← Back to team selection</button>
+    </div>
+  </div>
+
+  <script>
+    let gameData = null;
+    let currentTeamId = null;
+    let currentTeamName = '';
+    let clickState = {}; // button_id -> clicks
+    let gameTotalState = {}; // button_id -> total clicks across all teams in game
+    let gameStatus = 'stopped'; // running, paused, stopped
+
+    async function api(url, opts) {
+      const r = await fetch(url, opts);
+      return r.json();
+    }
+
+    async function loadActive() {
+      const d = await api('/api/active');
+      gameData = d;
+      document.getElementById('loadingMsg').style.display = 'none';
+      if (!d.series || !d.game) {
+        document.getElementById('noGame').style.display = '';
+        return;
+      }
+      document.getElementById('gameReady').style.display = '';
+      document.getElementById('seriesLabel').textContent = d.series.name;
+      document.getElementById('gameLabel').textContent = d.game.name;
+      loadTeams();
+    }
+
+    async function loadTeams() {
+      if (!gameData?.game) return;
+      const teams = await api('/api/games/' + gameData.game.id + '/teams');
+      if (teams.length > 0) {
+        document.getElementById('existingTeams').style.display = '';
+        document.getElementById('teamList').innerHTML = teams.map(t =>
+          '<button class="btn btn-sm" style="margin:4px;background:#e2e8f0;color:#334155" onclick="rejoin(' + t.id + ',\'' + escHtml(t.name) + '\')">' + escHtml(t.name) + '</button>'
+        ).join('');
+      }
+    }
+
+    function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+    async function joinOrCreate() {
+      const name = document.getElementById('teamNameInput').value.trim();
+      if (!name) return alert('Please enter a team name');
+      const t = await api('/api/teams', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ name, game_id: gameData.game.id })
+      });
+      enterScoring(t.id, t.name);
+    }
+
+    function rejoin(tid, name) { enterScoring(tid, name); }
+
+    async function enterScoring(tid, name) {
+      currentTeamId = tid;
+      currentTeamName = name;
+      document.getElementById('joinView').style.display = 'none';
+      document.getElementById('scoreView').style.display = '';
+      document.getElementById('sv_series').textContent = gameData.series.name;
+      document.getElementById('sv_game').textContent = gameData.game.name;
+      document.getElementById('sv_team').textContent = name;
+
+      // Load existing scores
+      const scores = await api('/api/teams/' + tid + '/scores');
+      clickState = {};
+      gameTotalState = {};
+      gameData.buttons.forEach(b => {
+        clickState[b.id] = scores[b.id]?.clicks || 0;
+        gameTotalState[b.id] = scores[b.id]?.game_total || 0;
+      });
+      gameStatus = gameData.game?.status || 'stopped';
+      renderButtons();
+      updateStatusBanner();
+      // Poll game status every 3s
+      if (window._statusInterval) clearInterval(window._statusInterval);
+      window._statusInterval = setInterval(pollStatus, 3000);
+    }
+
+    async function pollStatus() {
+      try {
+        const d = await api('/api/active');
+        const newStatus = d.game?.status || 'stopped';
+        if (newStatus !== gameStatus) {
+          gameStatus = newStatus;
+          renderButtons();
+          updateStatusBanner();
+        }
+      } catch(e) {}
+    }
+
+    function updateStatusBanner() {
+      const banner = document.getElementById('gameStatusBanner');
+      if (gameStatus === 'paused') {
+        banner.style.display = '';
+        banner.style.background = '#fef3c7';
+        banner.style.color = '#b45309';
+        banner.textContent = '⏸ Game Paused – Scoring disabled';
+      } else if (gameStatus === 'stopped') {
+        banner.style.display = '';
+        banner.style.background = '#fee2e2';
+        banner.style.color = '#dc2626';
+        banner.textContent = '⏹ Game Stopped';
+      } else {
+        banner.style.display = 'none';
+      }
+    }
+
+    function renderButtons() {
+      const grid = document.getElementById('buttonGrid');
+      const disabled = gameStatus !== 'running';
+      grid.innerHTML = gameData.buttons.map(b => {
+        const clicks = clickState[b.id] || 0;
+        const gameTotal = gameTotalState[b.id] || 0;
+        const atTeamMax = b.max_clicks != null && clicks >= b.max_clicks;
+        const atGameMax = b.max_clicks_game != null && gameTotal >= b.max_clicks_game;
+        const atMax = atTeamMax || atGameMax;
+        const teamMax = b.max_clicks != null ? 'team:' + b.max_clicks : '';
+        const gameMax = b.max_clicks_game != null ? 'game:' + b.max_clicks_game : '';
+        const maxLabel = [teamMax, gameMax].filter(Boolean).join(' ');
+        const imgTag = b.image_url ? '<img src="' + escHtml(b.image_url) + '" alt="">' : '';
+        const disAttr = disabled ? ' disabled style="opacity:0.4;pointer-events:none"' : '';
+        const plusDisAttr = (disabled || atMax) ? ' disabled style="opacity:0.4;pointer-events:none"' : '';
+        const countStyle = atMax ? 'color:#dc2626' : 'color:#2563eb';
+        return '<div class="score-btn-wrap"' + (disabled ? ' style="opacity:0.6"' : '') + '>'
+          + imgTag
+          + '<div class="label">' + escHtml(b.label) + '</div>'
+          + '<div class="pts">' + b.points + ' pts/click ' + (maxLabel ? '(' + maxLabel + ')' : '') + '</div>'
+          + '<div class="click-count" id="cc_' + b.id + '" style="' + countStyle + '">' + clicks + '</div>'
+          + '<div class="btn-row">'
+          + '  <button class="btn btn-danger"' + disAttr + ' onclick="doScore(' + b.id + ',-1)">−</button>'
+          + '  <button class="btn btn-success" id="plus_' + b.id + '"' + plusDisAttr + ' onclick="doScore(' + b.id + ',+1)">+</button>'
+          + '</div>'
+          + '</div>';
+      }).join('');
+      updateTotal();
+    }
+
+    function updateTotal() {
+      let total = 0;
+      gameData.buttons.forEach(b => { total += (clickState[b.id] || 0) * b.points; });
+      document.getElementById('sv_total').textContent = total;
+    }
+
+    async function doScore(btnId, delta) {
+      try {
+        const r = await api('/api/score', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ team_id: currentTeamId, button_id: btnId, delta })
+        });
+        clickState[btnId] = r.clicks;
+        gameTotalState[btnId] = r.game_total;
+        const el = document.getElementById('cc_' + btnId);
+        el.textContent = r.clicks;
+        const btn = gameData.buttons.find(b => b.id === btnId);
+        const atTeamMax = btn && btn.max_clicks != null && r.clicks >= btn.max_clicks;
+        const atGameMax = btn && btn.max_clicks_game != null && r.game_total >= btn.max_clicks_game;
+        const atMax = atTeamMax || atGameMax;
+        el.style.color = atMax ? '#dc2626' : '#2563eb';
+        const plusBtn = document.getElementById('plus_' + btnId);
+        if (plusBtn) {
+          plusBtn.disabled = atMax;
+          plusBtn.style.opacity = atMax ? '0.4' : '';
+          plusBtn.style.pointerEvents = atMax ? 'none' : '';
+        }
+        updateTotal();
+      } catch (e) {
+        // Max clicks or error – ignore silently
+      }
+    }
+
+    function leaveTeam() {
+      currentTeamId = null;
+      if (window._statusInterval) clearInterval(window._statusInterval);
+      document.getElementById('scoreView').style.display = 'none';
+      document.getElementById('joinView').style.display = '';
+      loadTeams();
+    }
+
+    loadActive();
+  </script>
+</body>
+</html>

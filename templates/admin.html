@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Robot Score – Admin</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>⚙️ Admin Panel</h1>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('tabSeries')">Series</button>
+      <button class="tab" onclick="switchTab('tabButtons')">Buttons</button>
+      <button class="tab" onclick="switchTab('tabScores')">Scores</button>
+    </div>
+
+    <!-- ═══ TAB: Series & Games ═══════════════════════ -->
+    <div id="tabSeries" class="tab-panel active">
+      <div class="card">
+        <h3>Create Series</h3>
+        <input type="text" id="newSeriesName" placeholder="Series name…">
+        <button class="btn btn-primary btn-block btn-sm mt-2" onclick="createSeries()">Create Series</button>
+      </div>
+      <div id="seriesList"></div>
+    </div>
+
+    <!-- ═══ TAB: Buttons ══════════════════════════════ -->
+    <div id="tabButtons" class="tab-panel">
+      <div class="card">
+        <h3>Active Series Buttons</h3>
+        <p class="text-sm text-muted mb-2" id="btnSeriesLabel">Select a series first</p>
+        <div id="buttonList"></div>
+        <hr style="border-color:#e2e8f0;margin:12px 0">
+        <h3>Add Button</h3>
+        <label>Label</label>
+        <input type="text" id="btnLabel" placeholder="e.g. Obstacle Passed">
+        <label>Image URL (optional)</label>
+        <input type="url" id="btnImage" placeholder="https://…">
+        <label>Points per click</label>
+        <input type="number" id="btnPoints" value="1" min="-100" max="100">
+        <label>Max clicks per team (leave 0 for unlimited)</label>
+        <input type="number" id="btnMax" value="0" min="0">
+        <label>Max clicks for game (leave 0 for unlimited)</label>
+        <input type="number" id="btnMaxGame" value="0" min="0">
+        <label>Display order</label>
+        <input type="number" id="btnOrder" value="0" min="0">
+        <button class="btn btn-primary btn-block btn-sm mt-2" onclick="createButton()">Add Button</button>
+      </div>
+    </div>
+
+    <!-- ═══ TAB: Scores ═══════════════════════════════ -->
+    <div id="tabScores" class="tab-panel">
+      <div class="card">
+        <h3>Manage Scores</h3>
+        <p class="text-sm text-muted mb-2">Select a game to manage team scores</p>
+        <label>Game</label>
+        <select id="scoreGameSelect" onchange="loadScoreTeams()">
+          <option value="">-- select --</option>
+        </select>
+        <div id="scoreTeamList" class="mt-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ── Helpers ─────────────────────────────────────── */
+    async function api(url, opts) { return (await fetch(url, opts)).json(); }
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    let activeSeries = null;
+
+    /* ── Tabs ────────────────────────────────────────── */
+    function switchTab(id) {
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+      event.target.classList.add('active');
+      if (id === 'tabButtons') loadButtons();
+      if (id === 'tabScores') loadScoreGames();
+    }
+
+    /* ── Series ──────────────────────────────────────── */
+    async function loadSeries() {
+      const list = await api('/api/series');
+      activeSeries = list.find(s => s.is_active) || null;
+      const el = document.getElementById('seriesList');
+      if (!list.length) { el.innerHTML = '<div class="empty-state">No series yet</div>'; return; }
+      el.innerHTML = list.map(s => {
+        const badge = s.is_active ? '<span class="badge badge-active">ACTIVE</span>' : '<span class="badge badge-inactive">inactive</span>';
+        let controls = '';
+        if (s.is_active) {
+          controls = '<button class="btn btn-danger btn-sm" onclick="deactivateSeries(' + s.id + ')">⏹ Stop</button>';
+        } else {
+          controls = '<button class="btn btn-success btn-sm" onclick="activateSeries(' + s.id + ')">▶ Start</button>';
+        }
+        return '<div class="card">'
+          + '<div class="flex justify-between items-center">'
+          + '  <div><strong>' + esc(s.name) + '</strong> ' + badge + '</div>'
+          + '  <div class="flex gap-2">'
+          + controls
+          + '    <button class="btn btn-danger btn-sm" onclick="deleteSeries(' + s.id + ')">✕</button>'
+          + '  </div>'
+          + '</div>'
+          + '<div class="mt-2" id="games_' + s.id + '"></div>'
+          + '<div class="flex gap-2 mt-2">'
+          + '  <input type="text" id="newGame_' + s.id + '" placeholder="New game name…" style="margin:0">'
+          + '  <button class="btn btn-primary btn-sm" onclick="createGame(' + s.id + ')">+ Game</button>'
+          + '</div>'
+          + '</div>';
+      }).join('');
+      list.forEach(s => loadGames(s.id));
+    }
+
+    async function createSeries() {
+      const name = document.getElementById('newSeriesName').value.trim();
+      if (!name) return;
+      await api('/api/series', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name}) });
+      document.getElementById('newSeriesName').value = '';
+      loadSeries();
+    }
+
+    async function activateSeries(id) {
+      await api('/api/series/' + id + '/activate', { method:'PUT' });
+      loadSeries();
+    }
+
+    async function deactivateSeries(id) {
+      if (!confirm('Stop this series? All games will be stopped.')) return;
+      await api('/api/series/' + id + '/deactivate', { method:'PUT' });
+      loadSeries();
+    }
+
+    async function deleteSeries(id) {
+      if (!confirm('Delete this series and ALL its games/teams?')) return;
+      await api('/api/series/' + id, { method:'DELETE' });
+      loadSeries();
+    }
+
+    /* ── Games ───────────────────────────────────────── */
+    async function loadGames(sid) {
+      const games = await api('/api/series/' + sid + '/games');
+      const el = document.getElementById('games_' + sid);
+      if (!games.length) { el.innerHTML = '<p class="text-sm text-muted">No games yet</p>'; return; }
+      el.innerHTML = games.map(g => {
+        let badge = '';
+        if (g.status === 'running') badge = '<span class="badge badge-active">RUNNING</span>';
+        else if (g.status === 'paused') badge = '<span class="badge" style="background:#f59e0b33;color:#f59e0b">PAUSED</span>';
+        else badge = g.is_active ? '<span class="badge badge-active">LIVE</span>' : '<span class="badge badge-inactive">STOPPED</span>';
+
+        let controls = '';
+        if (g.status === 'running') {
+          controls = '<button class="btn btn-warning btn-sm" onclick="pauseGame(' + g.id + ',' + sid + ')">⏸</button>'
+            + '<button class="btn btn-danger btn-sm" onclick="stopGame(' + g.id + ',' + sid + ')">⏹</button>';
+        } else if (g.status === 'paused') {
+          controls = '<button class="btn btn-success btn-sm" onclick="resumeGame(' + g.id + ',' + sid + ')">▶</button>'
+            + '<button class="btn btn-danger btn-sm" onclick="stopGame(' + g.id + ',' + sid + ')">⏹</button>';
+        } else {
+          controls = '<button class="btn btn-success btn-sm" onclick="activateGame(' + g.id + ',' + sid + ')">▶ Start</button>';
+        }
+
+        return '<div class="flex justify-between items-center" style="padding:4px 0">'
+          + '<span class="text-sm">' + esc(g.name) + ' ' + badge + '</span>'
+          + '<div class="flex gap-2">'
+          + controls
+          + '<button class="btn btn-danger btn-sm" onclick="deleteGame(' + g.id + ',' + sid + ')">✕</button>'
+          + '</div></div>';
+      }).join('');
+    }
+
+    async function createGame(sid) {
+      const input = document.getElementById('newGame_' + sid);
+      const name = input.value.trim();
+      if (!name) return;
+      await api('/api/games', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, series_id: sid}) });
+      input.value = '';
+      loadGames(sid);
+    }
+
+    async function activateGame(gid, sid) {
+      await api('/api/games/' + gid + '/activate', { method:'PUT' });
+      loadGames(sid);
+    }
+
+    async function pauseGame(gid, sid) {
+      await api('/api/games/' + gid + '/pause', { method:'PUT' });
+      loadGames(sid);
+    }
+
+    async function resumeGame(gid, sid) {
+      await api('/api/games/' + gid + '/resume', { method:'PUT' });
+      loadGames(sid);
+    }
+
+    async function stopGame(gid, sid) {
+      if (!confirm('Stop this game? Scoring will be disabled.')) return;
+      await api('/api/games/' + gid + '/stop', { method:'PUT' });
+      loadGames(sid);
+    }
+
+    async function deleteGame(gid, sid) {
+      if (!confirm('Delete this game and all its teams?')) return;
+      await api('/api/games/' + gid, { method:'DELETE' });
+      loadGames(sid);
+    }
+
+    /* ── Buttons ─────────────────────────────────────── */
+    let editingButtonId = null;
+
+    async function loadButtons() {
+      if (!activeSeries) {
+        document.getElementById('btnSeriesLabel').textContent = 'No active series – create and activate one first';
+        document.getElementById('buttonList').innerHTML = '';
+        return;
+      }
+      document.getElementById('btnSeriesLabel').textContent = 'Series: ' + activeSeries.name;
+      const btns = await api('/api/series/' + activeSeries.id + '/buttons');
+      const el = document.getElementById('buttonList');
+      if (!btns.length) { el.innerHTML = '<p class="text-sm text-muted">No buttons yet</p>'; return; }
+      el.innerHTML = btns.map(b => {
+        const status = b.is_active ? '<span class="badge badge-active">on</span>' : '<span class="badge badge-inactive">off</span>';
+        const img = b.image_url ? '<img src="' + esc(b.image_url) + '" style="width:28px;height:28px;border-radius:4px;margin-right:6px;vertical-align:middle">' : '';
+
+        if (editingButtonId === b.id) {
+          return '<div class="card" style="margin:6px 0;padding:10px">'
+            + '<label>Label</label>'
+            + '<input type="text" id="eb_label_' + b.id + '" value="' + esc(b.label) + '">'
+            + '<label>Image URL</label>'
+            + '<input type="url" id="eb_image_' + b.id + '" value="' + esc(b.image_url || '') + '">'
+            + '<label>Points per click</label>'
+            + '<input type="number" id="eb_points_' + b.id + '" value="' + b.points + '" min="-100" max="100">'
+            + '<label>Max clicks per team (0 = unlimited)</label>'
+            + '<input type="number" id="eb_max_' + b.id + '" value="' + (b.max_clicks ?? 0) + '" min="0">'
+            + '<label>Max clicks for game (0 = unlimited)</label>'
+            + '<input type="number" id="eb_maxg_' + b.id + '" value="' + (b.max_clicks_game ?? 0) + '" min="0">'
+            + '<label>Display order</label>'
+            + '<input type="number" id="eb_order_' + b.id + '" value="' + b.display_order + '" min="0">'
+            + '<div class="flex gap-2 mt-2">'
+            + '  <button class="btn btn-success btn-sm" onclick="saveButton(' + b.id + ')">Save</button>'
+            + '  <button class="btn btn-sm" style="background:#e2e8f0;color:#334155" onclick="cancelEdit()">Cancel</button>'
+            + '</div></div>';
+        }
+
+        return '<div class="flex justify-between items-center" style="padding:6px 0;border-bottom:1px solid #e2e8f0">'
+          + '<div>' + img + '<strong>' + esc(b.label) + '</strong> (' + b.points + ' pts, max/team:' + (b.max_clicks ?? '∞') + ', max/game:' + (b.max_clicks_game ?? '∞') + ') ' + status + '</div>'
+          + '<div class="flex gap-2">'
+          + '<button class="btn btn-sm" style="background:#e2e8f0;color:#334155" onclick="editButton(' + b.id + ')">✏️</button>'
+          + '<button class="btn btn-sm" style="background:#e2e8f0;color:#334155" onclick="toggleButton(' + b.id + ',' + !b.is_active + ')">👁</button>'
+          + '<button class="btn btn-danger btn-sm" onclick="deleteButton(' + b.id + ')">✕</button>'
+          + '</div></div>';
+      }).join('');
+    }
+
+    function editButton(bid) {
+      editingButtonId = bid;
+      loadButtons();
+    }
+
+    function cancelEdit() {
+      editingButtonId = null;
+      loadButtons();
+    }
+
+    async function saveButton(bid) {
+      const data = {
+        label: document.getElementById('eb_label_' + bid).value.trim(),
+        image_url: document.getElementById('eb_image_' + bid).value.trim() || null,
+        points: parseInt(document.getElementById('eb_points_' + bid).value) || 1,
+        max_clicks: parseInt(document.getElementById('eb_max_' + bid).value) || null,
+        max_clicks_game: parseInt(document.getElementById('eb_maxg_' + bid).value) || null,
+        display_order: parseInt(document.getElementById('eb_order_' + bid).value) || 0,
+      };
+      if (data.max_clicks === 0) data.max_clicks = null;
+      if (data.max_clicks_game === 0) data.max_clicks_game = null;
+      await api('/api/buttons/' + bid, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+      editingButtonId = null;
+      loadButtons();
+    }
+
+    async function createButton() {
+      if (!activeSeries) return alert('Activate a series first');
+      const label = document.getElementById('btnLabel').value.trim();
+      if (!label) return alert('Label required');
+      const data = {
+        label,
+        image_url: document.getElementById('btnImage').value.trim() || null,
+        points: parseInt(document.getElementById('btnPoints').value) || 1,
+        max_clicks: parseInt(document.getElementById('btnMax').value) || null,
+        max_clicks_game: parseInt(document.getElementById('btnMaxGame').value) || null,
+        display_order: parseInt(document.getElementById('btnOrder').value) || 0,
+        series_id: activeSeries.id,
+      };
+      if (data.max_clicks === 0) data.max_clicks = null;
+      if (data.max_clicks_game === 0) data.max_clicks_game = null;
+      await api('/api/buttons', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+      document.getElementById('btnLabel').value = '';
+      document.getElementById('btnImage').value = '';
+      document.getElementById('btnPoints').value = '1';
+      document.getElementById('btnMax').value = '0';
+      document.getElementById('btnMaxGame').value = '0';
+      document.getElementById('btnOrder').value = '0';
+      loadButtons();
+    }
+
+    async function toggleButton(bid, active) {
+      await api('/api/buttons/' + bid, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({is_active: active}) });
+      loadButtons();
+    }
+
+    async function deleteButton(bid) {
+      if (!confirm('Delete this button?')) return;
+      await api('/api/buttons/' + bid, { method:'DELETE' });
+      loadButtons();
+    }
+
+    /* ── Score management ────────────────────────────── */
+    async function loadScoreGames() {
+      const sel = document.getElementById('scoreGameSelect');
+      sel.innerHTML = '<option value="">-- select --</option>';
+      if (!activeSeries) return;
+      const games = await api('/api/series/' + activeSeries.id + '/games');
+      games.forEach(g => {
+        const opt = document.createElement('option');
+        opt.value = g.id; opt.textContent = g.name + (g.is_active ? ' (LIVE)' : '');
+        sel.appendChild(opt);
+      });
+    }
+
+    async function loadScoreTeams() {
+      const gid = document.getElementById('scoreGameSelect').value;
+      const el = document.getElementById('scoreTeamList');
+      if (!gid) { el.innerHTML = ''; return; }
+
+      const teams = await api('/api/games/' + gid + '/teams');
+      const btns = activeSeries ? await api('/api/series/' + activeSeries.id + '/buttons') : [];
+
+      if (!teams.length) { el.innerHTML = '<p class="text-sm text-muted">No teams in this game</p>'; return; }
+
+      let html = '<button class="btn btn-danger btn-sm mb-2" onclick="resetGameScores(' + gid + ')">Reset ALL scores in this game</button>';
+      for (const t of teams) {
+        const scores = await api('/api/teams/' + t.id + '/scores');
+        let total = 0;
+        let rows = btns.map(b => {
+          const c = scores[b.id]?.clicks || 0;
+          const p = scores[b.id]?.points || 0;
+          total += p;
+          return '<div class="flex justify-between items-center text-sm" style="padding:3px 0">'
+            + '<span>' + esc(b.label) + '</span>'
+            + '<div class="flex gap-2 items-center">'
+            + '  <input type="number" min="0" value="' + c + '" style="width:60px;margin:0" id="sc_' + t.id + '_' + b.id + '">'
+            + '  <button class="btn btn-sm btn-primary" onclick="setScore(' + t.id + ',' + b.id + ')">Set</button>'
+            + '</div></div>';
+        }).join('');
+
+        html += '<div class="card">'
+          + '<div class="flex justify-between items-center">'
+          + '  <strong>' + esc(t.name) + '</strong>'
+          + '  <span style="color:#d97706;font-weight:700">' + total + ' pts</span>'
+          + '</div>'
+          + rows
+          + '<div class="flex gap-2 mt-2">'
+          + '  <button class="btn btn-danger btn-sm" onclick="resetTeamScores(' + t.id + ')">Reset</button>'
+          + '  <button class="btn btn-danger btn-sm" onclick="deleteTeam(' + t.id + ')">Delete Team</button>'
+          + '</div></div>';
+      }
+      el.innerHTML = html;
+    }
+
+    async function setScore(tid, bid) {
+      const v = parseInt(document.getElementById('sc_' + tid + '_' + bid).value) || 0;
+      await api('/api/admin/score', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({team_id:tid, button_id:bid, clicks:v}) });
+      loadScoreTeams();
+    }
+
+    async function resetTeamScores(tid) {
+      if (!confirm('Reset all scores for this team?')) return;
+      await api('/api/admin/teams/' + tid + '/scores', { method:'DELETE' });
+      loadScoreTeams();
+    }
+
+    async function resetGameScores(gid) {
+      if (!confirm('Reset ALL team scores in this game?')) return;
+      await api('/api/admin/games/' + gid + '/scores', { method:'DELETE' });
+      loadScoreTeams();
+    }
+
+    async function deleteTeam(tid) {
+      if (!confirm('Delete this team and all its scores?')) return;
+      await api('/api/teams/' + tid, { method:'DELETE' });
+      loadScoreTeams();
+    }
+
+    /* ── Init ────────────────────────────────────────── */
+    loadSeries();
+  </script>
+</body>
+</html>

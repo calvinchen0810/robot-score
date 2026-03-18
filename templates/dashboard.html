@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Robot Score – Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    body { background: #ffffff; }
+    .dashboard-wrap { max-width: 1100px; margin: 0 auto; padding: 20px 24px; }
+    .section-title {
+      font-size: 1.1rem; color: #64748b; text-transform: uppercase;
+      letter-spacing: 1px; margin: 28px 0 12px; border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 6px;
+    }
+    .rank-row {
+      display: flex; align-items: center; padding: 10px 14px;
+      background: #f8fafc; border-radius: 10px; margin-bottom: 6px;
+      border: 1px solid #e2e8f0; transition: background .2s;
+    }
+    .rank-row:nth-child(1) { border-color: #fbbf24; background: #fefce8; }
+    .rank-row:nth-child(2) { border-color: #94a3b8; background: #f8fafc; }
+    .rank-row:nth-child(3) { border-color: #d97706; background: #fffbeb; }
+    .rank-pos { width: 36px; text-align: center; font-weight: 800; font-size: 1.2rem; color: #94a3b8; }
+    .rank-row:nth-child(1) .rank-pos { color: #d97706; }
+    .rank-row:nth-child(2) .rank-pos { color: #64748b; }
+    .rank-row:nth-child(3) .rank-pos { color: #b45309; }
+    .rank-name { flex: 1; font-weight: 600; font-size: 1.1rem; margin-left: 10px; color: #1e293b; }
+    .rank-detail { font-size: 0.78rem; color: #94a3b8; margin-left: 10px; }
+    .rank-score { font-size: 1.4rem; font-weight: 800; color: #d97706; min-width: 80px; text-align: right; }
+    .game-tag {
+      font-size: 0.7rem; background: #f1f5f9; color: #64748b;
+      padding: 2px 8px; border-radius: 6px; margin-left: 8px;
+    }
+    .no-data { text-align: center; color: #94a3b8; padding: 40px; font-size: 1.1rem; }
+  </style>
+</head>
+<body>
+  <div class="dashboard-wrap">
+    <div class="dashboard-header">
+      <h1 id="seriesName">🤖 Robot Score</h1>
+      <div id="gameBadge"></div>
+    </div>
+
+    <div id="noData" class="no-data" style="display:none">No active series – waiting for game to start…</div>
+
+    <div id="content" style="display:none">
+      <div class="section-title"><span class="live-dot"></span> Current Game Ranking</div>
+      <div id="gameRanking"></div>
+
+      <div class="section-title">All Teams – Series Ranking</div>
+      <div id="allRanking"></div>
+    </div>
+  </div>
+
+  <script>
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    function renderRanking(container, rows) {
+      if (!rows.length) {
+        container.innerHTML = '<div class="no-data">No teams yet</div>';
+        return;
+      }
+      container.innerHTML = rows.map((r, i) => {
+        const details = r.details.map(d => d.button_label + ':' + d.clicks).join(' · ');
+        const gameTag = r.game_name ? '<span class="game-tag">' + esc(r.game_name) + '</span>' : '';
+        return '<div class="rank-row">'
+          + '<div class="rank-pos">#' + (i + 1) + '</div>'
+          + '<div class="rank-name">' + esc(r.team_name) + gameTag + '</div>'
+          + '<div class="rank-detail">' + details + '</div>'
+          + '<div class="rank-score">' + r.total_points + '</div>'
+          + '</div>';
+      }).join('');
+    }
+
+    async function refresh() {
+      try {
+        const d = await (await fetch('/api/dashboard')).json();
+        if (!d.series) {
+          document.getElementById('noData').style.display = '';
+          document.getElementById('content').style.display = 'none';
+          return;
+        }
+        document.getElementById('noData').style.display = 'none';
+        document.getElementById('content').style.display = '';
+        document.getElementById('seriesName').textContent = '🤖 ' + d.series.name;
+        document.getElementById('gameBadge').innerHTML = d.active_game
+          ? '<span class="game-badge">'
+            + (d.active_game.status === 'running' ? '<span class="live-dot"></span>' : '')
+            + esc(d.active_game.name)
+            + (d.active_game.status === 'paused' ? ' <small style="opacity:0.7">⏸ PAUSED</small>' : '')
+            + (d.active_game.status === 'stopped' ? ' <small style="opacity:0.7">⏹ STOPPED</small>' : '')
+            + '</span>'
+          : '<span class="game-badge" style="background:#64748b">No active game</span>';
+
+        renderRanking(document.getElementById('gameRanking'), d.game_ranking);
+        renderRanking(document.getElementById('allRanking'), d.all_ranking);
+      } catch (e) { /* retry next tick */ }
+    }
+
+    refresh();
+    setInterval(refresh, 3000); // Auto-refresh every 3 seconds
+  </script>
+</body>
+</html>
