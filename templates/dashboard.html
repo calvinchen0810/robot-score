@@ -18,10 +18,10 @@
       background: #f8fafc; border-radius: 10px; margin-bottom: 6px;
       border: 1px solid #e2e8f0; transition: background .2s;
     }
-    .rank-row:nth-child(1) { border-color: #fbbf24; background: #fefce8; }
-    .rank-row:nth-child(2) { border-color: #94a3b8; background: #f8fafc; }
-    .rank-row:nth-child(3) { border-color: #d97706; background: #fffbeb; }
-    .rank-pos { width: 36px; text-align: center; font-weight: 800; font-size: 1.2rem; color: #94a3b8; }
+    .rank-row:nth-child(1) { border-color: #fbbf24; background: #fef9c3; border-width: 2px; }
+    .rank-row:nth-child(2) { border-color: #94a3b8; background: #f1f5f9; border-width: 2px; }
+    .rank-row:nth-child(3) { border-color: #d97706; background: #ffedd5; border-width: 2px; }
+    .rank-pos { width: 40px; text-align: center; font-weight: 800; font-size: 1.2rem; color: #94a3b8; }
     .rank-row:nth-child(1) .rank-pos { color: #d97706; }
     .rank-row:nth-child(2) .rank-pos { color: #64748b; }
     .rank-row:nth-child(3) .rank-pos { color: #b45309; }
@@ -61,11 +61,14 @@
         container.innerHTML = '<div class="no-data">No teams yet</div>';
         return;
       }
+      const icons = ['🥇', '🥈', '🥉'];
       container.innerHTML = rows.map((r, i) => {
         const details = r.details.map(d => d.button_label + ':' + d.clicks).join(' · ');
         const gameTag = r.game_name ? '<span class="game-tag">' + esc(r.game_name) + '</span>' : '';
+        const icon = i < 3 ? '<span style="font-size:1.4rem;margin-right:4px">' + icons[i] + '</span>' : '';
+        const posText = i < 3 ? icon : '<span>#' + (i + 1) + '</span>';
         return '<div class="rank-row">'
-          + '<div class="rank-pos">#' + (i + 1) + '</div>'
+          + '<div class="rank-pos">' + posText + '</div>'
           + '<div class="rank-name">' + esc(r.team_name) + gameTag + '</div>'
           + '<div class="rank-detail">' + details + '</div>'
           + '<div class="rank-score">' + r.total_points + '</div>'
