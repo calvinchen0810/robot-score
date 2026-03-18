@@ -65,7 +65,7 @@ h3 { font-size: 1rem; margin: 8px 0; color: #334155; }
 }
 
 .score-btn-wrap img {
-  width: 48px; height: 48px; object-fit: contain; margin-bottom: 6px;
+  width: 80px; height: 80px; object-fit: contain; margin-bottom: 6px;
   border-radius: 6px;
 }
 
