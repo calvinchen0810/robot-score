@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Float
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -23,6 +23,8 @@ class Game(Base):
     series_id = Column(Integer, ForeignKey("series.id"), nullable=False)
     is_active = Column(Boolean, default=False)
     status = Column(String(20), default="stopped")  # stopped, running, paused
+    duration_seconds = Column(Float, nullable=True)   # None = no timer
+    started_at = Column(DateTime, nullable=True)       # when current run started
     created_at = Column(DateTime, default=datetime.utcnow)
 
     series = relationship("Series", back_populates="games")

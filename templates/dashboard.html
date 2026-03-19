@@ -161,6 +161,15 @@
       prevRanks[cid] = curr;
     }
 
+    function formatTimer(game) {
+      if (!game || game.remaining_seconds == null) return '';
+      const rem = Math.max(0, Math.ceil(game.remaining_seconds));
+      const mins = Math.floor(rem / 60);
+      const secs = rem % 60;
+      const color = rem <= 10 ? '#dc2626' : rem <= 30 ? '#f59e0b' : '#16a34a';
+      return ' <span style="font-weight:800;color:' + color + ';font-size:2.5rem;margin-left:12px">⏱ ' + mins + ':' + String(secs).padStart(2, '0') + '</span>';
+    }
+
     async function refresh() {
       try {
         const d = await (await fetch('/api/dashboard')).json();
@@ -178,6 +187,7 @@
             + esc(d.active_game.name)
             + (d.active_game.status === 'paused' ? ' <small style="opacity:0.7">⏸ PAUSED</small>' : '')
             + (d.active_game.status === 'stopped' ? ' <small style="opacity:0.7">⏹ STOPPED</small>' : '')
+            + formatTimer(d.active_game)
             + '</span>'
           : '<span class="game-badge" style="background:#64748b">No active game</span>';
 

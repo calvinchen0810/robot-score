@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
@@ -13,6 +14,45 @@ from schemas import (
 )
 
 router = APIRouter(prefix="/api")
+
+
+def _remaining(game):
+    """Compute seconds remaining for a game timer. Returns None if no timer."""
+    if game.duration_seconds is None:
+        return None
+    if game.status == "running" and game.started_at:
+        elapsed = (datetime.now(timezone.utc) - game.started_at.replace(tzinfo=timezone.utc)).total_seconds()
+        return max(0, game.duration_seconds - elapsed)
+    if game.status == "paused":
+        return max(0, game.duration_seconds)
+    return 0
+
+
+def _check_auto_stop(game, db):
+    """Auto-stop game if timer expired. Returns True if stopped."""
+    if game.status != "running" or game.duration_seconds is None or not game.started_at:
+        return False
+    elapsed = (datetime.now(timezone.utc) - game.started_at.replace(tzinfo=timezone.utc)).total_seconds()
+    if elapsed >= game.duration_seconds:
+        game.status = "stopped"
+        game.is_active = False
+        game.started_at = None
+        db.commit()
+        return True
+    return False
+
+
+def _game_out(game):
+    """Serialize a Game to GameOut-compatible dict."""
+    return {
+        "id": game.id,
+        "name": game.name,
+        "series_id": game.series_id,
+        "is_active": game.is_active,
+        "status": game.status,
+        "duration_seconds": game.duration_seconds,
+        "remaining_seconds": _remaining(game),
+    }
 
 
 # ── Series ──────────────────────────────────────────────
@@ -64,18 +104,36 @@ def delete_series(sid: int, db: Session = Depends(get_db)):
 
 
 # ── Games ───────────────────────────────────────────────
-@router.get("/series/{sid}/games", response_model=List[GameOut])
+@router.get("/series/{sid}/games")
 def list_games(sid: int, db: Session = Depends(get_db)):
-    return db.query(Game).filter(Game.series_id == sid).order_by(Game.id).all()
+    games = db.query(Game).filter(Game.series_id == sid).order_by(Game.id).all()
+    for g in games:
+        _check_auto_stop(g, db)
+    return [_game_out(g) for g in games]
 
 
 @router.post("/games", response_model=GameOut)
 def create_game(data: GameCreate, db: Session = Depends(get_db)):
-    g = Game(name=data.name, series_id=data.series_id)
+    g = Game(name=data.name, series_id=data.series_id,
+             duration_seconds=data.duration_seconds if data.duration_seconds and data.duration_seconds > 0 else None)
     db.add(g)
     db.commit()
     db.refresh(g)
-    return g
+    return _game_out(g)
+
+
+@router.put("/games/{gid}/open")
+def open_game(gid: int, db: Session = Depends(get_db)):
+    """Make game visible for team joining, but don't start scoring yet."""
+    game = db.query(Game).get(gid)
+    if not game:
+        raise HTTPException(404, "Game not found")
+    # deactivate all other games in same series
+    db.query(Game).filter(Game.series_id == game.series_id).update({Game.is_active: False, Game.status: "stopped", Game.started_at: None})
+    game.is_active = True
+    game.status = "stopped"
+    db.commit()
+    return {"ok": True}
 
 
 @router.put("/games/{gid}/activate")
@@ -83,10 +141,12 @@ def activate_game(gid: int, db: Session = Depends(get_db)):
     game = db.query(Game).get(gid)
     if not game:
         raise HTTPException(404, "Game not found")
-    # deactivate and stop all games in same series
-    db.query(Game).filter(Game.series_id == game.series_id).update({Game.is_active: False, Game.status: "stopped"})
-    game.is_active = True
+    # If not already open, open it first
+    if not game.is_active:
+        db.query(Game).filter(Game.series_id == game.series_id).update({Game.is_active: False, Game.status: "stopped", Game.started_at: None})
+        game.is_active = True
     game.status = "running"
+    game.started_at = datetime.now(timezone.utc)
     db.commit()
     return {"ok": True}
 
@@ -98,7 +158,12 @@ def pause_game(gid: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Game not found")
     if game.status != "running":
         raise HTTPException(400, "Game is not running")
+    # Save remaining time into duration_seconds
+    if game.duration_seconds is not None and game.started_at:
+        elapsed = (datetime.now(timezone.utc) - game.started_at.replace(tzinfo=timezone.utc)).total_seconds()
+        game.duration_seconds = max(0, game.duration_seconds - elapsed)
     game.status = "paused"
+    game.started_at = None
     db.commit()
     return {"ok": True}
 
@@ -111,6 +176,7 @@ def resume_game(gid: int, db: Session = Depends(get_db)):
     if game.status != "paused":
         raise HTTPException(400, "Game is not paused")
     game.status = "running"
+    game.started_at = datetime.now(timezone.utc)
     db.commit()
     return {"ok": True}
 
@@ -225,6 +291,9 @@ def update_score(data: ScoreAction, db: Session = Depends(get_db)):
     game = db.query(Game).get(team.game_id)
     if not game or game.status != "running":
         raise HTTPException(400, "Game is not running – scoring is disabled")
+    # Auto-stop if timer expired
+    if _check_auto_stop(game, db):
+        raise HTTPException(400, "Time is up – game has been stopped")
 
     btn = db.query(ScoreButton).get(data.button_id)
     if not btn:
@@ -335,6 +404,8 @@ def dashboard_data(db: Session = Depends(get_db)):
     btn_map = {b.id: b for b in buttons}
 
     active_game = db.query(Game).filter(Game.series_id == series.id, Game.is_active == True).first()
+    if active_game:
+        _check_auto_stop(active_game, db)
 
     def calc_ranking(teams):
         ranking = []
@@ -373,7 +444,7 @@ def dashboard_data(db: Session = Depends(get_db)):
 
     return {
         "series": {"id": series.id, "name": series.name},
-        "active_game": {"id": active_game.id, "name": active_game.name, "status": active_game.status} if active_game else None,
+        "active_game": {"id": active_game.id, "name": active_game.name, "status": active_game.status, "remaining_seconds": _remaining(active_game)} if active_game else None,
         "game_ranking": game_ranking,
         "all_ranking": all_ranking,
         "games": [{"id": g.id, "name": g.name, "is_active": g.is_active, "status": g.status} for g in games],
@@ -388,6 +459,8 @@ def get_active(db: Session = Depends(get_db)):
     if not series:
         return {"series": None}
     game = db.query(Game).filter(Game.series_id == series.id, Game.is_active == True).first()
+    if game:
+        _check_auto_stop(game, db)
     buttons = (
         db.query(ScoreButton)
         .filter(ScoreButton.series_id == series.id, ScoreButton.is_active == True)
@@ -396,7 +469,7 @@ def get_active(db: Session = Depends(get_db)):
     )
     return {
         "series": {"id": series.id, "name": series.name},
-        "game": {"id": game.id, "name": game.name, "status": game.status} if game else None,
+        "game": {"id": game.id, "name": game.name, "status": game.status, "remaining_seconds": _remaining(game)} if game else None,
         "buttons": [
             {
                 "id": b.id, "label": b.label, "image_url": b.image_url,

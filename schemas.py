@@ -15,6 +15,7 @@ class SeriesOut(BaseModel):
 class GameCreate(BaseModel):
     name: str
     series_id: int
+    duration_seconds: Optional[float] = None
 
 class GameOut(BaseModel):
     id: int
@@ -22,6 +23,8 @@ class GameOut(BaseModel):
     series_id: int
     is_active: bool
     status: str = "stopped"
+    duration_seconds: Optional[float] = None
+    remaining_seconds: Optional[float] = None
     class Config:
         from_attributes = True
 

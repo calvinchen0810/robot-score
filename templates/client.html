@@ -46,6 +46,7 @@
         </div>
         <div style="text-align:right">
           <div class="text-sm text-muted" id="sv_game"></div>
+          <div id="sv_timer" style="font-size:1.1rem;font-weight:700;color:#16a34a;display:none"></div>
           <div style="font-size:2.8rem;font-weight:800;color:#d97706" id="sv_total">0</div>
         </div>
       </div>
@@ -129,6 +130,7 @@
       gameStatus = gameData.game?.status || 'stopped';
       renderButtons();
       updateStatusBanner();
+      updateTimer(gameData.game?.remaining_seconds);
       // Poll game status every 3s
       if (window._statusInterval) clearInterval(window._statusInterval);
       window._statusInterval = setInterval(pollStatus, 3000);
@@ -144,6 +146,8 @@
           gameStatus = newStatus;
           updateStatusBanner();
         }
+        // Update timer
+        updateTimer(d.game?.remaining_seconds);
         // Always refresh scores from server (other teams may have scored)
         if (currentTeamId) {
           const scores = await api('/api/teams/' + currentTeamId + '/scores');
@@ -156,6 +160,17 @@
       } catch(e) {}
     }
 
+    function updateTimer(remaining) {
+      const el = document.getElementById('sv_timer');
+      if (remaining == null) { el.style.display = 'none'; return; }
+      el.style.display = '';
+      const rem = Math.max(0, Math.ceil(remaining));
+      const mins = Math.floor(rem / 60);
+      const secs = rem % 60;
+      el.textContent = '\u23f1 ' + mins + ':' + String(secs).padStart(2, '0');
+      el.style.color = rem <= 10 ? '#dc2626' : rem <= 30 ? '#f59e0b' : '#16a34a';
+    }
+
     function updateStatusBanner() {
       const banner = document.getElementById('gameStatusBanner');
       if (gameStatus === 'paused') {
@@ -165,9 +180,9 @@
         banner.textContent = '⏸ Game Paused – Scoring disabled';
       } else if (gameStatus === 'stopped') {
         banner.style.display = '';
-        banner.style.background = '#fee2e2';
-        banner.style.color = '#dc2626';
-        banner.textContent = '⏹ Game Stopped';
+        banner.style.background = '#dbeafe';
+        banner.style.color = '#2563eb';
+        banner.textContent = '⏳ Waiting for game to start…';
       } else {
         banner.style.display = 'none';
       }
