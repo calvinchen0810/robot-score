@@ -135,7 +135,12 @@
 
       const icons = ['🥇', '🥈', '🥉'];
       container.innerHTML = rows.map((r, i) => {
-        const details = r.details.map(d => d.button_label + ':' + d.clicks).join(' · ');
+        const details = r.details.map(d => {
+          if (d.button_image) {
+            return '<img src="' + esc(d.button_image) + '" alt="' + esc(d.button_label) + '" style="width:40px;height:40px;object-fit:contain;vertical-align:middle;margin-right:2px">' + esc(d.button_label) + ':<span style="font-size:1.3rem;font-weight:700">' + d.clicks + '</span>';
+          }
+          return esc(d.button_label) + ':<span style="font-size:1.3rem;font-weight:700">' + d.clicks + '</span>';
+        }).join(' &nbsp; ');
         const gameTag = r.game_name ? '<span class="game-tag">' + esc(r.game_name) + '</span>' : '';
         const iconSizes = ['2.2rem', '1.9rem', '1.6rem'];
         const icon = i < 3 ? '<span style="font-size:' + iconSizes[i] + ';margin-right:4px">' + icons[i] + '</span>' : '';

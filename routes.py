@@ -411,16 +411,28 @@ def dashboard_data(db: Session = Depends(get_db)):
         ranking = []
         for t in teams:
             total = 0
-            details = []
+            scored = {}
             for sc in t.scores:
                 if sc.button_id in btn_map:
                     pts = sc.clicks * btn_map[sc.button_id].points
                     total += pts
-                    details.append({
-                        "button_label": btn_map[sc.button_id].label,
-                        "clicks": sc.clicks,
-                        "points": pts,
-                    })
+                    scored[sc.button_id] = {"clicks": sc.clicks, "points": pts}
+            # Include all buttons, even those with 0 clicks
+            details = []
+            for b in buttons:
+                sc_data = scored.get(b.id, {"clicks": 0, "points": 0})
+                details.append({
+                    "button_label": b.label,
+                    "button_image": b.image_url,
+                    "clicks": sc_data["clicks"],
+                    "points": sc_data["points"],
+                })
+            # Tiebreaker: for same total points, compare clicks on buttons by display_order (higher order = higher priority)
+            # Build a tuple of clicks ordered by display_order descending for lexicographic comparison
+            tiebreaker = tuple(
+                scored.get(b.id, {"clicks": 0})["clicks"]
+                for b in sorted(buttons, key=lambda b: b.display_order, reverse=True)
+            )
             ranking.append({
                 "team_id": t.id,
                 "team_name": t.name,
@@ -428,8 +440,11 @@ def dashboard_data(db: Session = Depends(get_db)):
                 "game_name": t.game.name,
                 "total_points": total,
                 "details": details,
+                "_tiebreaker": tiebreaker,
             })
-        ranking.sort(key=lambda x: x["total_points"], reverse=True)
+        ranking.sort(key=lambda x: (x["total_points"], x["_tiebreaker"]), reverse=True)
+        for r in ranking:
+            del r["_tiebreaker"]
         return ranking
 
     game_ranking = []
