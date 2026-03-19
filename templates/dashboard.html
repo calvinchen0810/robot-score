@@ -87,6 +87,18 @@
     <div class="dashboard-header">
       <h1 id="seriesName">🤖 Robot Score</h1>
       <div id="gameBadge"></div>
+      <!-- Planning countdown timer (visible when game not running) -->
+      <div id="planningTimer" style="display:none;margin-top:12px;text-align:center">
+        <div id="planningEdit" style="display:flex;align-items:center;justify-content:center;gap:8px">
+          <input type="number" id="planMin" value="5" min="0" max="99" style="width:60px;font-size:1.2rem;text-align:center;padding:6px;border:2px solid #e2e8f0;border-radius:8px"> <span style="font-size:1.2rem;color:#64748b">min</span>
+          <input type="number" id="planSec" value="0" min="0" max="59" style="width:60px;font-size:1.2rem;text-align:center;padding:6px;border:2px solid #e2e8f0;border-radius:8px"> <span style="font-size:1.2rem;color:#64748b">sec</span>
+          <button onclick="startPlanTimer()" style="background:#3b82f6;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer">▶ Start</button>
+        </div>
+        <div id="planningDisplay" style="display:none">
+          <div id="planCountdown" style="font-size:4rem;font-weight:800;color:#3b82f6;margin:8px 0"></div>
+          <button onclick="resetPlanTimer()" style="background:#e2e8f0;color:#334155;border:none;padding:6px 14px;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer">⟲ Reset</button>
+        </div>
+      </div>
     </div>
 
     <div id="noData" class="no-data" style="display:none">No active series – waiting for game to start…</div>
@@ -170,6 +182,57 @@
       return '<div style="font-weight:800;color:' + color + ';font-size:2.5rem;margin-top:4px">⏱ ' + mins + ':' + String(secs).padStart(2, '0') + '</div>';
     }
 
+    // Planning countdown timer state
+    let planEnd = null;
+    let planInterval = null;
+
+    function startPlanTimer() {
+      const mins = parseInt(document.getElementById('planMin').value) || 0;
+      const secs = parseInt(document.getElementById('planSec').value) || 0;
+      const total = mins * 60 + secs;
+      if (total <= 0) return;
+      planEnd = Date.now() + total * 1000;
+      document.getElementById('planningEdit').style.display = 'none';
+      document.getElementById('planningDisplay').style.display = '';
+      if (planInterval) clearInterval(planInterval);
+      planInterval = setInterval(tickPlanTimer, 200);
+      tickPlanTimer();
+    }
+
+    function tickPlanTimer() {
+      const rem = Math.max(0, Math.ceil((planEnd - Date.now()) / 1000));
+      const mins = Math.floor(rem / 60);
+      const secs = rem % 60;
+      const el = document.getElementById('planCountdown');
+      el.textContent = '⏱ ' + mins + ':' + String(secs).padStart(2, '0');
+      el.style.color = rem <= 10 ? '#dc2626' : rem <= 30 ? '#f59e0b' : '#3b82f6';
+      if (rem <= 0) {
+        clearInterval(planInterval);
+        planInterval = null;
+        el.textContent = '⏱ Time!';
+        el.style.color = '#dc2626';
+      }
+    }
+
+    function resetPlanTimer() {
+      if (planInterval) clearInterval(planInterval);
+      planInterval = null;
+      planEnd = null;
+      document.getElementById('planningEdit').style.display = 'flex';
+      document.getElementById('planningDisplay').style.display = 'none';
+    }
+
+    function updatePlanTimerVisibility(activeGame) {
+      const el = document.getElementById('planningTimer');
+      if (!activeGame || activeGame.status !== 'running') {
+        el.style.display = '';
+      } else {
+        el.style.display = 'none';
+        // Auto-reset when game starts
+        if (planInterval) resetPlanTimer();
+      }
+    }
+
     async function refresh() {
       try {
         const d = await (await fetch('/api/dashboard')).json();
@@ -193,6 +256,7 @@
 
         renderRanking(document.getElementById('gameRanking'), d.game_ranking);
         renderRanking(document.getElementById('allRanking'), d.all_ranking);
+        updatePlanTimerVisibility(d.active_game);
       } catch (e) { /* retry next tick */ }
     }
 
