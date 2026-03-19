@@ -125,8 +125,8 @@ tr:hover td { background: #f8fafc; }
 .dashboard-header h1 { font-size: 2rem; color: #0f172a; }
 .dashboard-header .game-badge {
   display: inline-block;
-  background: #3b82f6; color: #fff;
-  padding: 4px 16px; border-radius: 20px;
+  background: transparent; color: #1e293b;
+  padding: 4px 0; border-radius: 0;
   font-size: 0.9rem; margin-top: 6px;
 }
 
