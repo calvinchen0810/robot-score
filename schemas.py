@@ -90,3 +90,19 @@ class TeamScoreManual(BaseModel):
     team_id: int
     button_id: int
     clicks: int
+
+
+class SongCreate(BaseModel):
+    title: str
+    url: str
+    display_order: int = 0
+    series_id: int
+
+class SongOut(BaseModel):
+    id: int
+    title: str
+    url: str
+    display_order: int
+    series_id: int
+    class Config:
+        from_attributes = True

@@ -67,3 +67,13 @@ class TeamScore(Base):
 
     team = relationship("Team", back_populates="scores")
     button = relationship("ScoreButton")
+
+
+class Song(Base):
+    __tablename__ = "songs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(200), nullable=False)
+    url = Column(String(500), nullable=False)
+    display_order = Column(Integer, default=0)
+    series_id = Column(Integer, ForeignKey("series.id"), nullable=False)

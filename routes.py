@@ -4,13 +4,14 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from database import get_db
-from models import Series, Game, Team, ScoreButton, TeamScore
+from models import Series, Game, Team, ScoreButton, TeamScore, Song
 from schemas import (
     SeriesCreate, SeriesOut,
     GameCreate, GameOut,
     TeamCreate, TeamUpdate, TeamOut,
     ScoreButtonCreate, ScoreButtonUpdate, ScoreButtonOut,
     ScoreAction, TeamScoreOut, TeamScoreManual,
+    SongCreate, SongOut,
 )
 
 router = APIRouter(prefix="/api")
@@ -457,6 +458,8 @@ def dashboard_data(db: Session = Depends(get_db)):
 
     games = db.query(Game).filter(Game.series_id == series.id).order_by(Game.id).all()
 
+    songs = db.query(Song).filter(Song.series_id == series.id).order_by(Song.display_order, Song.id).all()
+
     return {
         "series": {"id": series.id, "name": series.name},
         "active_game": {"id": active_game.id, "name": active_game.name, "status": active_game.status, "remaining_seconds": _remaining(active_game)} if active_game else None,
@@ -464,6 +467,7 @@ def dashboard_data(db: Session = Depends(get_db)):
         "all_ranking": all_ranking,
         "games": [{"id": g.id, "name": g.name, "is_active": g.is_active, "status": g.status} for g in games],
         "buttons": [{"id": b.id, "label": b.label, "points": b.points} for b in buttons],
+        "songs": [{"id": s.id, "title": s.title, "url": s.url} for s in songs],
     }
 
 
@@ -524,5 +528,30 @@ def admin_reset_game_scores(gid: int, db: Session = Depends(get_db)):
     teams = db.query(Team).filter(Team.game_id == gid).all()
     for t in teams:
         db.query(TeamScore).filter(TeamScore.team_id == t.id).delete()
+    db.commit()
+    return {"ok": True}
+
+
+# ── Songs ───────────────────────────────────────────────
+@router.get("/series/{sid}/songs", response_model=List[SongOut])
+def list_songs(sid: int, db: Session = Depends(get_db)):
+    return db.query(Song).filter(Song.series_id == sid).order_by(Song.display_order, Song.id).all()
+
+
+@router.post("/songs", response_model=SongOut)
+def create_song(data: SongCreate, db: Session = Depends(get_db)):
+    s = Song(**data.model_dump())
+    db.add(s)
+    db.commit()
+    db.refresh(s)
+    return s
+
+
+@router.delete("/songs/{sid}")
+def delete_song(sid: int, db: Session = Depends(get_db)):
+    s = db.query(Song).get(sid)
+    if not s:
+        raise HTTPException(404, "Song not found")
+    db.delete(s)
     db.commit()
     return {"ok": True}

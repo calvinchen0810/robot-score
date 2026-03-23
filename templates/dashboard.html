@@ -113,6 +113,25 @@
       </div>
       <div id="allRanking" style="display:none"></div>
     </div>
+
+    <!-- Music Player -->
+    <div id="musicPlayer" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#f8fafc;border-top:2px solid #e2e8f0;padding:8px 16px;z-index:100">
+      <div style="max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:12px">
+        <button onclick="prevSong()" style="background:none;border:none;font-size:1.2rem;cursor:pointer">⏮</button>
+        <button id="playPauseBtn" onclick="togglePlay()" style="background:#3b82f6;color:#fff;border:none;width:36px;height:36px;border-radius:50%;font-size:1.1rem;cursor:pointer">▶</button>
+        <button onclick="nextSong()" style="background:none;border:none;font-size:1.2rem;cursor:pointer">⏭</button>
+        <div style="flex:1;min-width:0">
+          <div id="nowPlaying" style="font-weight:600;font-size:0.85rem;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">♫ No songs</div>
+          <div style="font-size:0.7rem;color:#94a3b8" id="songIndex"></div>
+        </div>
+        <button onclick="toggleMusicPanel()" style="background:#e2e8f0;border:none;padding:4px 10px;border-radius:6px;font-size:0.75rem;font-weight:600;cursor:pointer;color:#334155">♫ List</button>
+        <button id="repeatBtn" onclick="toggleRepeat()" style="background:none;border:none;font-size:1.1rem;cursor:pointer;opacity:0.4" title="Repeat one">🔂</button>
+      </div>
+      <div id="songListPanel" style="display:none;max-width:1100px;margin:6px auto 0;max-height:150px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;background:#fff">
+        <div id="dashSongList"></div>
+      </div>
+      <audio id="audioEl" preload="auto"></audio>
+    </div>
   </div>
 
   <script>
@@ -278,8 +297,112 @@
         renderRanking(document.getElementById('gameRanking'), d.game_ranking);
         renderRanking(document.getElementById('allRanking'), d.all_ranking);
         updatePlanTimerVisibility(d.active_game);
+        updateSongList(d.songs);
       } catch (e) { /* retry next tick */ }
     }
+
+    // Music player
+    let songList = [];
+    let currentSongIdx = -1;
+    const audioEl = document.getElementById('audioEl');
+
+    function updateSongList(songs) {
+      if (!songs || !songs.length) {
+        document.getElementById('musicPlayer').style.display = 'none';
+        songList = [];
+        return;
+      }
+      document.getElementById('musicPlayer').style.display = '';
+      // Only update if song list changed
+      const newIds = songs.map(s => s.id).join(',');
+      const oldIds = songList.map(s => s.id).join(',');
+      if (newIds !== oldIds) {
+        songList = songs;
+        if (currentSongIdx < 0) {
+          currentSongIdx = 0;
+          loadCurrentSong();
+        }
+        renderSongListPanel();
+      }
+    }
+
+    function renderSongListPanel() {
+      const el = document.getElementById('dashSongList');
+      el.innerHTML = songList.map((s, i) =>
+        '<div onclick="playSongAt(' + i + ')" style="padding:6px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;' + (i === currentSongIdx ? 'background:#eff6ff;font-weight:700' : '') + '">'
+        + '<span style="color:#3b82f6;margin-right:6px">' + (i === currentSongIdx ? '\u25b6' : '') + '</span>'
+        + esc(s.title)
+        + '</div>'
+      ).join('');
+    }
+
+    function loadCurrentSong() {
+      if (currentSongIdx < 0 || !songList.length) return;
+      const s = songList[currentSongIdx];
+      document.getElementById('nowPlaying').textContent = '\u266b ' + s.title;
+      document.getElementById('songIndex').textContent = (currentSongIdx + 1) + ' / ' + songList.length;
+      audioEl.src = s.url;
+      renderSongListPanel();
+    }
+
+    function togglePlay() {
+      if (!songList.length) return;
+      if (currentSongIdx < 0) { currentSongIdx = 0; loadCurrentSong(); }
+      if (audioEl.paused) {
+        audioEl.play();
+        document.getElementById('playPauseBtn').textContent = '\u23f8';
+      } else {
+        audioEl.pause();
+        document.getElementById('playPauseBtn').textContent = '\u25b6';
+      }
+    }
+
+    function nextSong() {
+      if (!songList.length) return;
+      currentSongIdx = (currentSongIdx + 1) % songList.length;
+      loadCurrentSong();
+      audioEl.play();
+      document.getElementById('playPauseBtn').textContent = '\u23f8';
+    }
+
+    function prevSong() {
+      if (!songList.length) return;
+      currentSongIdx = (currentSongIdx - 1 + songList.length) % songList.length;
+      loadCurrentSong();
+      audioEl.play();
+      document.getElementById('playPauseBtn').textContent = '\u23f8';
+    }
+
+    function playSongAt(idx) {
+      currentSongIdx = idx;
+      loadCurrentSong();
+      audioEl.play();
+      document.getElementById('playPauseBtn').textContent = '\u23f8';
+    }
+
+    function toggleMusicPanel() {
+      const el = document.getElementById('songListPanel');
+      el.style.display = el.style.display === 'none' ? '' : 'none';
+    }
+
+    let repeatOne = false;
+
+    function toggleRepeat() {
+      repeatOne = !repeatOne;
+      const btn = document.getElementById('repeatBtn');
+      btn.style.opacity = repeatOne ? '1' : '0.4';
+      btn.style.background = repeatOne ? '#dbeafe' : 'none';
+      btn.style.borderRadius = '6px';
+    }
+
+    audioEl.addEventListener('ended', function() {
+      if (repeatOne) {
+        audioEl.currentTime = 0;
+        audioEl.play();
+      } else {
+        nextSong();
+      }
+    });
 
     refresh();
     setInterval(refresh, 1000); // Auto-refresh every 1 second

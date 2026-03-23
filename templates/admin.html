@@ -15,6 +15,7 @@
       <button class="tab active" onclick="switchTab('tabSeries')">Series</button>
       <button class="tab" onclick="switchTab('tabButtons')">Buttons</button>
       <button class="tab" onclick="switchTab('tabScores')">Scores</button>
+      <button class="tab" onclick="switchTab('tabSongs')">Songs</button>
     </div>
 
     <!-- ═══ TAB: Series & Games ═══════════════════════ -->
@@ -63,7 +64,23 @@
         <div id="scoreTeamList" class="mt-2"></div>
       </div>
     </div>
-  </div>
+    <!-- ═══ TAB: Songs ════════════════════════════════════════ -->
+    <div id="tabSongs" class="tab-panel">
+      <div class="card">
+        <h3>Song List</h3>
+        <p class="text-sm text-muted mb-2" id="songSeriesLabel">Select a series first</p>
+        <div id="songList"></div>
+        <hr style="border-color:#e2e8f0;margin:12px 0">
+        <h3>Add Song</h3>
+        <label>Title</label>
+        <input type="text" id="songTitle" placeholder="Song name…">
+        <label>URL (audio file or stream)</label>
+        <input type="url" id="songUrl" placeholder="https://….mp3">
+        <label>Display order</label>
+        <input type="number" id="songOrder" value="0" min="0">
+        <button class="btn btn-primary btn-block btn-sm mt-2" onclick="createSong()">Add Song</button>
+      </div>
+    </div>  </div>
 
   <script>
     /* ── Helpers ─────────────────────────────────────── */
@@ -79,6 +96,7 @@
       event.target.classList.add('active');
       if (id === 'tabButtons') loadButtons();
       if (id === 'tabScores') loadScoreGames();
+      if (id === 'tabSongs') loadSongs();
     }
 
     /* ── Series ──────────────────────────────────────── */
@@ -464,6 +482,48 @@
     }
 
     /* ── Init ────────────────────────────────────────── */
+
+    /* ── Songs ───────────────────────────────────────── */
+    async function loadSongs() {
+      if (!activeSeries) {
+        document.getElementById('songSeriesLabel').textContent = 'No active series';
+        document.getElementById('songList').innerHTML = '';
+        return;
+      }
+      document.getElementById('songSeriesLabel').textContent = 'Songs for: ' + activeSeries.name;
+      const songs = await api('/api/series/' + activeSeries.id + '/songs');
+      const el = document.getElementById('songList');
+      if (!songs.length) { el.innerHTML = '<p class="text-sm text-muted">No songs yet</p>'; return; }
+      el.innerHTML = songs.map(s =>
+        '<div class="flex justify-between items-center" style="padding:4px 0;border-bottom:1px solid #f1f5f9">'
+        + '<div><strong>' + esc(s.title) + '</strong><br><span class="text-sm text-muted" style="word-break:break-all">' + esc(s.url) + '</span></div>'
+        + '<button class="btn btn-danger btn-sm" onclick="deleteSong(' + s.id + ')">✕</button>'
+        + '</div>'
+      ).join('');
+    }
+
+    async function createSong() {
+      if (!activeSeries) return alert('No active series');
+      const title = document.getElementById('songTitle').value.trim();
+      const url = document.getElementById('songUrl').value.trim();
+      const order = parseInt(document.getElementById('songOrder').value) || 0;
+      if (!title || !url) return alert('Title and URL are required');
+      await api('/api/songs', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ title, url, display_order: order, series_id: activeSeries.id })
+      });
+      document.getElementById('songTitle').value = '';
+      document.getElementById('songUrl').value = '';
+      document.getElementById('songOrder').value = '0';
+      loadSongs();
+    }
+
+    async function deleteSong(id) {
+      if (!confirm('Delete this song?')) return;
+      await api('/api/songs/' + id, { method: 'DELETE' });
+      loadSongs();
+    }
+
     loadSeries();
     // Auto-refresh game timers every 2s without re-rendering inputs
     setInterval(() => {
