@@ -107,13 +107,28 @@
       <div class="section-title"><span class="live-dot"></span> Current Game Ranking</div>
       <div id="gameRanking"></div>
 
-      <div class="section-title">All Teams – Series Ranking</div>
-      <div id="allRanking"></div>
+      <div class="section-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>All Teams – Series Ranking</span>
+        <button id="toggleSeriesBtn" onclick="toggleSeriesRanking()" style="background:#e2e8f0;color:#334155;border:none;padding:4px 12px;border-radius:6px;font-size:0.8rem;font-weight:600;cursor:pointer">Show</button>
+      </div>
+      <div id="allRanking" style="display:none"></div>
     </div>
   </div>
 
   <script>
     function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    function toggleSeriesRanking() {
+      const el = document.getElementById('allRanking');
+      const btn = document.getElementById('toggleSeriesBtn');
+      if (el.style.display === 'none') {
+        el.style.display = '';
+        btn.textContent = 'Hide';
+      } else {
+        el.style.display = 'none';
+        btn.textContent = 'Show';
+      }
+    }
 
     // Store previous rank positions per container
     const prevRanks = {};
