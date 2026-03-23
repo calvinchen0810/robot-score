@@ -195,6 +195,7 @@
 
     function formatTimer(game) {
       if (!game || game.remaining_seconds == null) return '';
+      if (game.status === 'stopped') return '';
       const rem = Math.max(0, Math.ceil(game.remaining_seconds));
       const mins = Math.floor(rem / 60);
       const secs = rem % 60;
@@ -225,7 +226,7 @@
       const secs = rem % 60;
       const el = document.getElementById('planCountdown');
       el.textContent = '⏱ ' + mins + ':' + String(secs).padStart(2, '0');
-      el.style.color = rem <= 10 ? '#dc2626' : rem <= 30 ? '#f59e0b' : '#3b82f6';
+      el.style.color = rem <= 180 ? '#dc2626' : rem <= 360 ? '#f59e0b' : '#3b82f6';
       if (rem <= 0) {
         clearInterval(planInterval);
         planInterval = null;
