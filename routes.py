@@ -1,12 +1,14 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 import json
+import hashlib
+import secrets
 
 from database import get_db
-from models import Series, Game, Team, ScoreButton, TeamScore, Song
+from models import Series, Game, Team, ScoreButton, TeamScore, Song, AdminSetting
 from schemas import (
     SeriesCreate, SeriesOut,
     GameCreate, GameOut,
@@ -17,6 +19,65 @@ from schemas import (
 )
 
 router = APIRouter(prefix="/api")
+
+# ── Admin auth helpers ────────────────────────────────────
+_DEFAULT_PASSWORD = "admin123"
+_admin_tokens: set = set()
+
+
+def _hash_pw(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def _ensure_admin_password(db: Session):
+    """Create default admin password if not set."""
+    row = db.query(AdminSetting).filter(AdminSetting.key == "admin_password").first()
+    if not row:
+        db.add(AdminSetting(key="admin_password", value=_hash_pw(_DEFAULT_PASSWORD)))
+        db.commit()
+
+
+def _require_admin(x_admin_token: Optional[str] = Header(None)):
+    if not x_admin_token or x_admin_token not in _admin_tokens:
+        raise HTTPException(401, "Unauthorized")
+
+
+@router.post("/admin/login")
+def admin_login(body: dict, db: Session = Depends(get_db)):
+    _ensure_admin_password(db)
+    password = body.get("password", "")
+    row = db.query(AdminSetting).filter(AdminSetting.key == "admin_password").first()
+    if not row or row.value != _hash_pw(password):
+        raise HTTPException(401, "Wrong password")
+    token = secrets.token_hex(32)
+    _admin_tokens.add(token)
+    return {"token": token}
+
+
+@router.get("/admin/verify")
+def admin_verify(x_admin_token: Optional[str] = Header(None)):
+    if x_admin_token and x_admin_token in _admin_tokens:
+        return {"ok": True}
+    raise HTTPException(401, "Unauthorized")
+
+
+@router.put("/admin/password")
+def admin_change_password(
+    body: dict,
+    db: Session = Depends(get_db),
+    _auth=Depends(_require_admin),
+):
+    old_pw = body.get("old_password", "")
+    new_pw = body.get("new_password", "")
+    if not new_pw or len(new_pw) < 4:
+        raise HTTPException(400, "New password must be at least 4 characters")
+    _ensure_admin_password(db)
+    row = db.query(AdminSetting).filter(AdminSetting.key == "admin_password").first()
+    if not row or row.value != _hash_pw(old_pw):
+        raise HTTPException(401, "Current password is wrong")
+    row.value = _hash_pw(new_pw)
+    db.commit()
+    return {"ok": True}
 
 
 def _remaining(game):
@@ -562,7 +623,7 @@ def delete_song(sid: int, db: Session = Depends(get_db)):
 # ── Export / Import Database ──────────────────────────────
 
 @router.get("/admin/export")
-def export_database(db: Session = Depends(get_db)):
+def export_database(db: Session = Depends(get_db), _auth=Depends(_require_admin)):
     """Export entire database as JSON."""
     data = {
         "series": [],
@@ -615,7 +676,7 @@ def export_database(db: Session = Depends(get_db)):
 
 
 @router.post("/admin/import")
-async def import_database(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def import_database(file: UploadFile = File(...), db: Session = Depends(get_db), _auth=Depends(_require_admin)):
     """Import database from JSON file, replacing all existing data."""
     content = await file.read()
     try:

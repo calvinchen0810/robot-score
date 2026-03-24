@@ -77,3 +77,11 @@ class Song(Base):
     url = Column(String(500), nullable=False)
     display_order = Column(Integer, default=0)
     series_id = Column(Integer, ForeignKey("series.id"), nullable=False)
+
+
+class AdminSetting(Base):
+    __tablename__ = "admin_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(100), unique=True, nullable=False)
+    value = Column(String(500), nullable=False)

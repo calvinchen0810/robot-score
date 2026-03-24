@@ -7,8 +7,22 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <div class="container">
-    <h1>⚙️ Admin Panel</h1>
+  <!-- ═══ LOGIN SCREEN ════════════════════════════════ -->
+  <div id="loginScreen" class="container" style="max-width:360px;margin-top:80px">
+    <div class="card" style="text-align:center">
+      <h2>🔒 Admin Login</h2>
+      <input type="password" id="loginPassword" placeholder="Password…" style="margin-top:12px">
+      <button class="btn btn-primary btn-block btn-sm mt-2" onclick="doLogin()">Login</button>
+      <p id="loginError" class="mt-2" style="color:#dc2626;display:none"></p>
+    </div>
+  </div>
+
+  <!-- ═══ ADMIN PANEL (hidden until login) ═══════════ -->
+  <div id="adminPanel" class="container" style="display:none">
+    <div class="flex justify-between items-center">
+      <h1>⚙️ Admin Panel</h1>
+      <button class="btn btn-sm" style="background:#e2e8f0;color:#334155" onclick="doLogout()">🚪 Logout</button>
+    </div>
 
     <!-- Tabs -->
     <div class="tabs">
@@ -17,6 +31,7 @@
       <button class="tab" onclick="switchTab('tabScores')">Scores</button>
       <button class="tab" onclick="switchTab('tabSongs')">Songs</button>
       <button class="tab" onclick="switchTab('tabDatabase')">Database</button>
+      <button class="tab" onclick="switchTab('tabSettings')">Settings</button>
     </div>
 
     <!-- ═══ TAB: Series & Games ═══════════════════════ -->
@@ -96,11 +111,37 @@
         <button class="btn btn-danger btn-block btn-sm mt-2" onclick="importDB()">Import JSON</button>
         <div id="importStatus" class="mt-2"></div>
       </div>
+    </div>
+    <!-- ═══ TAB: Settings (Change Password) ═══════════════ -->
+    <div id="tabSettings" class="tab-panel">
+      <div class="card">
+        <h3>🔑 Change Admin Password</h3>
+        <label>Current password</label>
+        <input type="password" id="settOldPw" placeholder="Current password…">
+        <label>New password</label>
+        <input type="password" id="settNewPw" placeholder="New password (min 4 chars)…">
+        <label>Confirm new password</label>
+        <input type="password" id="settNewPw2" placeholder="Confirm new password…">
+        <button class="btn btn-primary btn-block btn-sm mt-2" onclick="changePassword()">Update Password</button>
+        <div id="pwStatus" class="mt-2"></div>
+      </div>
     </div>  </div>
 
   <script>
+    /* ── Auth state ──────────────────────────────────── */
+    let adminToken = sessionStorage.getItem('adminToken') || '';
+
+    function authHeaders() {
+      return adminToken ? { 'X-Admin-Token': adminToken } : {};
+    }
+
     /* ── Helpers ─────────────────────────────────────── */
-    async function api(url, opts) { return (await fetch(url, opts)).json(); }
+    async function api(url, opts = {}) {
+      opts.headers = Object.assign({}, opts.headers || {}, authHeaders());
+      const res = await fetch(url, opts);
+      if (res.status === 401) { doLogout(); throw new Error('Session expired'); }
+      return res.json();
+    }
     function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
     let activeSeries = null;
 
@@ -540,14 +581,99 @@
       loadSongs();
     }
 
+    /* ── Login / Logout ──────────────────────────────── */
+    async function doLogin() {
+      const pw = document.getElementById('loginPassword').value;
+      const errEl = document.getElementById('loginError');
+      errEl.style.display = 'none';
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ password: pw })
+        });
+        const data = await res.json();
+        if (res.ok && data.token) {
+          adminToken = data.token;
+          sessionStorage.setItem('adminToken', adminToken);
+          showAdmin();
+        } else {
+          errEl.textContent = data.detail || 'Wrong password';
+          errEl.style.display = 'block';
+        }
+      } catch(e) {
+        errEl.textContent = 'Connection error';
+        errEl.style.display = 'block';
+      }
+    }
+    document.getElementById('loginPassword').addEventListener('keydown', e => {
+      if (e.key === 'Enter') doLogin();
+    });
+
+    function doLogout() {
+      adminToken = '';
+      sessionStorage.removeItem('adminToken');
+      document.getElementById('adminPanel').style.display = 'none';
+      document.getElementById('loginScreen').style.display = '';
+      document.getElementById('loginPassword').value = '';
+    }
+
+    function showAdmin() {
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('adminPanel').style.display = '';
+      loadSeries();
+    }
+
+    // On page load, check if stored token is still valid
+    (async function checkSession() {
+      if (!adminToken) return;
+      try {
+        const res = await fetch('/api/admin/verify', { headers: {'X-Admin-Token': adminToken} });
+        if (res.ok) { showAdmin(); return; }
+      } catch(e) {}
+      doLogout();
+    })();
+
+    /* ── Change Password ─────────────────────────────── */
+    async function changePassword() {
+      const oldPw = document.getElementById('settOldPw').value;
+      const newPw = document.getElementById('settNewPw').value;
+      const newPw2 = document.getElementById('settNewPw2').value;
+      const st = document.getElementById('pwStatus');
+      if (newPw !== newPw2) { st.innerHTML = '<span style="color:#dc2626">Passwords do not match</span>'; return; }
+      if (newPw.length < 4) { st.innerHTML = '<span style="color:#dc2626">Min 4 characters</span>'; return; }
+      try {
+        const res = await fetch('/api/admin/password', {
+          method: 'PUT', headers: Object.assign({'Content-Type':'application/json'}, authHeaders()),
+          body: JSON.stringify({ old_password: oldPw, new_password: newPw })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          st.innerHTML = '<span style="color:#16a34a">✅ Password updated!</span>';
+          document.getElementById('settOldPw').value = '';
+          document.getElementById('settNewPw').value = '';
+          document.getElementById('settNewPw2').value = '';
+        } else {
+          st.innerHTML = '<span style="color:#dc2626">❌ ' + (data.detail || 'Failed') + '</span>';
+        }
+      } catch(e) {
+        st.innerHTML = '<span style="color:#dc2626">❌ ' + e.message + '</span>';
+      }
+    }
+
     /* ── Database Export / Import ──────────────────────── */
-    function exportDB() {
-      const a = document.createElement('a');
-      a.href = '/api/admin/export';
-      a.download = 'robot_score_backup.json';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+    async function exportDB() {
+      try {
+        const res = await fetch('/api/admin/export', { headers: authHeaders() });
+        if (!res.ok) { alert('Export failed'); return; }
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'robot_score_backup.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+      } catch(e) { alert('Export error: ' + e.message); }
     }
 
     async function importDB() {
@@ -559,7 +685,7 @@
       formData.append('file', fileInput.files[0]);
       statusEl.innerHTML = '<span style="color:#3b82f6">Importing…</span>';
       try {
-        const res = await fetch('/api/admin/import', { method: 'POST', body: formData });
+        const res = await fetch('/api/admin/import', { method: 'POST', headers: authHeaders(), body: formData });
         const data = await res.json();
         if (res.ok) {
           statusEl.innerHTML = '<span style="color:#16a34a">✅ Import successful!</span>';
@@ -573,9 +699,9 @@
       }
     }
 
-    loadSeries();
     // Auto-refresh game timers every 2s without re-rendering inputs
     setInterval(() => {
+      if (!adminToken) return;
       const seriesTab = document.getElementById('tabSeries');
       if (seriesTab && seriesTab.classList.contains('active')) {
         refreshGameTimers();
