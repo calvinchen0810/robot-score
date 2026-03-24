@@ -20,20 +20,16 @@
     }
     .rank-row:nth-child(1) { border-color: #fbbf24; background: #fef9c3; border-width: 3px; padding: 18px 20px; }
     .rank-row:nth-child(2) { border-color: #94a3b8; background: #f1f5f9; border-width: 3px; padding: 16px 20px; }
-    .rank-row:nth-child(3) { border-color: #d97706; background: #ffedd5; border-width: 3px; padding: 14px 20px; }
     .rank-pos { width: 40px; text-align: center; font-weight: 800; font-size: 1.2rem; color: #94a3b8; }
     .rank-row:nth-child(1) .rank-pos { color: #d97706; font-size: 2rem; }
     .rank-row:nth-child(2) .rank-pos { color: #64748b; font-size: 1.8rem; }
-    .rank-row:nth-child(3) .rank-pos { color: #b45309; font-size: 1.6rem; }
     .rank-name { flex: 1; font-weight: 600; font-size: 1.1rem; margin-left: 10px; color: #1e293b; }
     .rank-row:nth-child(1) .rank-name { font-size: 2rem; font-weight: 800; }
     .rank-row:nth-child(2) .rank-name { font-size: 1.7rem; font-weight: 700; }
-    .rank-row:nth-child(3) .rank-name { font-size: 1.5rem; font-weight: 700; }
     .rank-detail { font-size: 0.78rem; color: #94a3b8; margin-left: 10px; }
     .rank-score { font-size: 1.4rem; font-weight: 800; color: #d97706; min-width: 80px; text-align: right; }
     .rank-row:nth-child(1) .rank-score { font-size: 2.4rem; }
     .rank-row:nth-child(2) .rank-score { font-size: 2rem; }
-    .rank-row:nth-child(3) .rank-score { font-size: 1.8rem; }
     .game-tag {
       font-size: 0.7rem; background: #f1f5f9; color: #64748b;
       padding: 2px 8px; border-radius: 6px; margin-left: 8px;
@@ -196,7 +192,7 @@
       const curr = {};
       rows.forEach((r, i) => { curr[teamKey(r)] = i; });
 
-      const icons = ['🥇', '🥈', '🥉'];
+      const icons = ['🥇', '🥈'];
       container.innerHTML = rows.map((r, i) => {
         const details = r.details.map(d => {
           if (d.button_image) {
@@ -205,9 +201,9 @@
           return esc(d.button_label) + ':<span style="font-size:1.3rem;font-weight:700">' + d.clicks + '</span>';
         }).join(' &nbsp; ');
         const gameTag = r.game_name ? '<span class="game-tag">' + esc(r.game_name) + '</span>' : '';
-        const iconSizes = ['2.2rem', '1.9rem', '1.6rem'];
-        const icon = i < 3 ? '<span style="font-size:' + iconSizes[i] + ';margin-right:4px">' + icons[i] + '</span>' : '';
-        const posText = i < 3 ? icon : '<span>#' + (i + 1) + '</span>';
+        const iconSizes = ['2.2rem', '1.9rem'];
+        const icon = i < 2 ? '<span style="font-size:' + iconSizes[i] + ';margin-right:4px">' + icons[i] + '</span>' : '';
+        const posText = i < 2 ? icon : '<span>#' + (i + 1) + '</span>';
 
         // Determine rank change
         const key = teamKey(r);
