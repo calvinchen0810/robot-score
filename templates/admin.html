@@ -253,17 +253,17 @@
           + '<button class="btn btn-danger btn-sm" onclick="stopGame(' + g.id + ',' + sid + ')">⏹</button>';
       } else if (g.is_active && g.status === 'stopped') {
         // Game is open for joining but not started yet
-        controls = '<button class="btn btn-sm" style="background:#dbeafe;color:#2563eb" onclick="randomizeOrder(' + g.id + ',' + sid + ')">🎲 Draw</button>'
-          + '<button class="btn btn-success btn-sm" onclick="activateGame(' + g.id + ',' + sid + ')">▶ Start</button>'
-          + '<button class="btn btn-danger btn-sm" onclick="stopGame(' + g.id + ',' + sid + ')">⏹ Close</button>';
+        controls = '<button class="btn btn-sm" style="background:#dbeafe;color:#2563eb" onclick="randomizeOrder(' + g.id + ',' + sid + ')">🎲</button>'
+          + '<button class="btn btn-success btn-sm" onclick="activateGame(' + g.id + ',' + sid + ')">▶</button>'
+          + '<button class="btn btn-danger btn-sm" onclick="stopGame(' + g.id + ',' + sid + ')">⏹</button>';
       } else {
-        controls = '<button class="btn btn-sm" style="background:#e2e8f0;color:#334155" onclick="openGame(' + g.id + ',' + sid + ')">🔓 Open</button>'
-          + '<button class="btn btn-sm" style="background:#dbeafe;color:#2563eb" onclick="randomizeOrder(' + g.id + ',' + sid + ')">🎲 Draw</button>'
-          + '<button class="btn btn-success btn-sm" onclick="activateGame(' + g.id + ',' + sid + ')">▶ Start</button>';
+        controls = '<button class="btn btn-sm" style="background:#e2e8f0;color:#334155" onclick="openGame(' + g.id + ',' + sid + ')">🔓</button>'
+          + '<button class="btn btn-sm" style="background:#dbeafe;color:#2563eb" onclick="randomizeOrder(' + g.id + ',' + sid + ')">🎲</button>'
+          + '<button class="btn btn-success btn-sm" onclick="activateGame(' + g.id + ',' + sid + ')">▶</button>';
       }
 
       return '<div id="grow_' + g.id + '" class="flex justify-between items-center" style="padding:4px 0">'
-        + '<span class="text-sm">' + esc(g.name) + ' ' + badge + timerHtml + '</span>'
+        + '<span class="text-sm">' + esc(g.name) + timerHtml + ' ' + badge + '</span>'
         + '<div class="flex gap-2">'
         + controls
         + '<button class="btn btn-danger btn-sm" onclick="deleteGame(' + g.id + ',' + sid + ')">✕</button>'
