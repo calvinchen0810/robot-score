@@ -30,7 +30,6 @@
       <button class="tab" onclick="switchTab('tabButtons')">Buttons</button>
       <button class="tab" onclick="switchTab('tabScores')">Scores</button>
       <button class="tab" onclick="switchTab('tabSongs')">Songs</button>
-      <button class="tab" onclick="switchTab('tabDatabase')">Database</button>
       <button class="tab" onclick="switchTab('tabSettings')">Settings</button>
     </div>
 
@@ -97,22 +96,7 @@
         <button class="btn btn-primary btn-block btn-sm mt-2" onclick="createSong()">Add Song</button>
       </div>
     </div>
-    <!-- ═══ TAB: Database ═════════════════════════════════════ -->
-    <div id="tabDatabase" class="tab-panel">
-      <div class="card">
-        <h3>📤 Export Database</h3>
-        <p class="text-sm text-muted mb-2">Download the entire database as a JSON file</p>
-        <button class="btn btn-primary btn-block btn-sm mt-2" onclick="exportDB()">Export JSON</button>
-      </div>
-      <div class="card">
-        <h3>📥 Import Database</h3>
-        <p class="text-sm text-muted mb-2" style="color:#dc2626">⚠️ This will replace ALL existing data!</p>
-        <input type="file" id="importFile" accept=".json" style="margin-bottom:8px">
-        <button class="btn btn-danger btn-block btn-sm mt-2" onclick="importDB()">Import JSON</button>
-        <div id="importStatus" class="mt-2"></div>
-      </div>
-    </div>
-    <!-- ═══ TAB: Settings (Change Password) ═══════════════ -->
+    <!-- ═══ TAB: Settings ═════════════════════════════════════ -->
     <div id="tabSettings" class="tab-panel">
       <div class="card">
         <h3>🔑 Change Admin Password</h3>
@@ -124,6 +108,18 @@
         <input type="password" id="settNewPw2" placeholder="Confirm new password…">
         <button class="btn btn-primary btn-block btn-sm mt-2" onclick="changePassword()">Update Password</button>
         <div id="pwStatus" class="mt-2"></div>
+      </div>
+      <div class="card">
+        <h3>📤 Export Database</h3>
+        <p class="text-sm text-muted mb-2">Download the entire database as a JSON file</p>
+        <button class="btn btn-primary btn-block btn-sm mt-2" onclick="exportDB()">Export JSON</button>
+      </div>
+      <div class="card">
+        <h3>📥 Import Database</h3>
+        <p class="text-sm text-muted mb-2" style="color:#dc2626">⚠️ This will replace ALL existing data!</p>
+        <input type="file" id="importFile" accept=".json" style="margin-bottom:8px">
+        <button class="btn btn-danger btn-block btn-sm mt-2" onclick="importDB()">Import JSON</button>
+        <div id="importStatus" class="mt-2"></div>
       </div>
     </div>  </div>
 
