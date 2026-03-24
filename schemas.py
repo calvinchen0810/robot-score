@@ -33,12 +33,14 @@ class TeamCreate(BaseModel):
     game_id: int
 
 class TeamUpdate(BaseModel):
-    name: str
+    name: Optional[str] = None
+    start_order: Optional[int] = None
 
 class TeamOut(BaseModel):
     id: int
     name: str
     game_id: int
+    start_order: Optional[int] = None
     class Config:
         from_attributes = True
 

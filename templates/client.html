@@ -43,6 +43,7 @@
             <h1 style="text-align:left;padding:0" id="sv_team"></h1>
             <button class="btn btn-sm" style="background:#e2e8f0;color:#334155;padding:4px 8px;font-size:0.75rem" onclick="renameTeam()">✏️</button>
           </div>
+          <div id="sv_startOrder" style="display:none;font-size:1.8rem;font-weight:800;color:#2563eb;margin-top:2px">起點 #<span id="sv_orderNum"></span></div>
         </div>
         <div style="text-align:right">
           <div class="text-sm text-muted" id="sv_game"></div>
@@ -90,7 +91,7 @@
       if (teams.length > 0) {
         document.getElementById('existingTeams').style.display = '';
         document.getElementById('teamList').innerHTML = teams.map(t =>
-          '<button class="btn btn-sm" style="margin:4px;background:#e2e8f0;color:#334155" onclick="rejoin(' + t.id + ',\'' + escHtml(t.name) + '\')">' + escHtml(t.name) + '</button>'
+          '<button class="btn btn-sm" style="margin:4px;background:#e2e8f0;color:#334155" onclick="rejoin(' + t.id + ',\'' + escHtml(t.name) + '\',' + (t.start_order || 0) + ')">' + escHtml(t.name) + (t.start_order ? ' <span style="color:#2563eb;font-weight:700">起點 #' + t.start_order + '</span>' : '') + '</button>'
         ).join('');
       }
     }
@@ -105,12 +106,12 @@
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ name, game_id: gameData.game.id })
       });
-      enterScoring(t.id, t.name);
+      enterScoring(t.id, t.name, t.start_order);
     }
 
-    function rejoin(tid, name) { enterScoring(tid, name); }
+    function rejoin(tid, name, startOrder) { enterScoring(tid, name, startOrder); }
 
-    async function enterScoring(tid, name) {
+    async function enterScoring(tid, name, startOrder) {
       currentTeamId = tid;
       currentTeamName = name;
       document.getElementById('joinView').style.display = 'none';
@@ -118,6 +119,14 @@
       document.getElementById('sv_series').textContent = gameData.series.name;
       document.getElementById('sv_game').textContent = gameData.game.name;
       document.getElementById('sv_team').textContent = name;
+
+      // Show start order if assigned
+      if (startOrder) {
+        document.getElementById('sv_startOrder').style.display = '';
+        document.getElementById('sv_orderNum').textContent = startOrder;
+      } else {
+        document.getElementById('sv_startOrder').style.display = 'none';
+      }
 
       // Load existing scores
       const scores = await api('/api/teams/' + tid + '/scores');
@@ -155,6 +164,15 @@
             clickState[b.id] = scores[b.id]?.clicks || 0;
             gameTotalState[b.id] = scores[b.id]?.game_total || 0;
           });
+          // Update start order if admin randomized
+          if (d.game) {
+            const teams = await api('/api/games/' + d.game.id + '/teams');
+            const me = teams.find(t => t.id === currentTeamId);
+            if (me && me.start_order) {
+              document.getElementById('sv_startOrder').style.display = '';
+              document.getElementById('sv_orderNum').textContent = me.start_order;
+            }
+          }
         }
         renderButtons();
       } catch(e) {}

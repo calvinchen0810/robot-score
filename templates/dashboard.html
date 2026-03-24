@@ -227,7 +227,7 @@
 
         return '<div class="' + rowClass + '">'
           + '<div class="rank-pos">' + posText + '</div>'
-          + '<div class="rank-name">' + esc(r.team_name) + changeHtml + gameTag + '</div>'
+          + '<div class="rank-name">' + esc(r.team_name) + (r.start_order ? ' <span class="game-tag">起點 #' + r.start_order + '</span>' : '') + changeHtml + gameTag + '</div>'
           + '<div class="rank-detail">' + details + '</div>'
           + '<div class="rank-score">' + r.total_points + '</div>'
           + '</div>';
@@ -244,7 +244,7 @@
       const mins = Math.floor(rem / 60);
       const secs = rem % 60;
       const color = rem <= 10 ? '#dc2626' : rem <= 30 ? '#f59e0b' : '#16a34a';
-      return '<div style="font-weight:800;color:' + color + ';font-size:2.5rem;margin-top:4px">⏱ ' + mins + ':' + String(secs).padStart(2, '0') + '</div>';
+      return '<div style="font-weight:800;color:' + color + ';font-size:4rem;margin-top:4px;text-align:center">⏱ ' + mins + ':' + String(secs).padStart(2, '0') + '</div>';
     }
 
     // Planning countdown timer state

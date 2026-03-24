@@ -37,6 +37,7 @@ class Team(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(200), nullable=False)
     game_id = Column(Integer, ForeignKey("games.id"), nullable=False)
+    start_order = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     game = relationship("Game", back_populates="teams")

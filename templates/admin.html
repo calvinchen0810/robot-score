@@ -253,10 +253,12 @@
           + '<button class="btn btn-danger btn-sm" onclick="stopGame(' + g.id + ',' + sid + ')">⏹</button>';
       } else if (g.is_active && g.status === 'stopped') {
         // Game is open for joining but not started yet
-        controls = '<button class="btn btn-success btn-sm" onclick="activateGame(' + g.id + ',' + sid + ')">▶ Start</button>'
+        controls = '<button class="btn btn-sm" style="background:#dbeafe;color:#2563eb" onclick="randomizeOrder(' + g.id + ',' + sid + ')">🎲 Draw</button>'
+          + '<button class="btn btn-success btn-sm" onclick="activateGame(' + g.id + ',' + sid + ')">▶ Start</button>'
           + '<button class="btn btn-danger btn-sm" onclick="stopGame(' + g.id + ',' + sid + ')">⏹ Close</button>';
       } else {
         controls = '<button class="btn btn-sm" style="background:#e2e8f0;color:#334155" onclick="openGame(' + g.id + ',' + sid + ')">🔓 Open</button>'
+          + '<button class="btn btn-sm" style="background:#dbeafe;color:#2563eb" onclick="randomizeOrder(' + g.id + ',' + sid + ')">🎲 Draw</button>'
           + '<button class="btn btn-success btn-sm" onclick="activateGame(' + g.id + ',' + sid + ')">▶ Start</button>';
       }
 
@@ -334,6 +336,14 @@
       if (!confirm('Delete this game and all its teams?')) return;
       await api('/api/games/' + gid, { method:'DELETE' });
       loadGames(sid);
+    }
+
+    async function randomizeOrder(gid, sid) {
+      try {
+        await api('/api/games/' + gid + '/randomize', { method:'POST' });
+        alert('Start order randomized!');
+        loadGames(sid);
+      } catch(e) { alert(e.message); }
     }
 
     /* ── Buttons ─────────────────────────────────────── */
@@ -492,6 +502,11 @@
           + '  </div>'
           + '  <span style="color:#d97706;font-weight:700">' + total + ' pts</span>'
           + '</div>'
+          + '<div class="flex items-center gap-2" style="margin:4px 0">'
+          + '  <span class="text-sm text-muted">起點#</span>'
+          + '  <input type="number" min="0" value="' + (t.start_order || 0) + '" style="width:60px;margin:0" id="so_' + t.id + '">'
+          + '  <button class="btn btn-sm" style="background:#dbeafe;color:#2563eb;padding:2px 8px;font-size:0.7rem" onclick="setStartOrder(' + t.id + ')">Set</button>'
+          + '</div>'
           + rows
           + '<div class="flex gap-2 mt-2">'
           + '  <button class="btn btn-danger btn-sm" onclick="resetTeamScores(' + t.id + ')">Reset</button>'
@@ -519,6 +534,12 @@
       const newName = prompt('Enter new team name:', oldName);
       if (!newName || !newName.trim() || newName.trim() === oldName) return;
       await api('/api/teams/' + tid, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: newName.trim() }) });
+      loadScoreTeams();
+    }
+
+    async function setStartOrder(tid) {
+      const v = parseInt(document.getElementById('so_' + tid).value) || 0;
+      await api('/api/teams/' + tid, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ start_order: v }) });
       loadScoreTeams();
     }
 

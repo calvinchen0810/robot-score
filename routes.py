@@ -6,6 +6,7 @@ from typing import List, Optional
 import json
 import hashlib
 import secrets
+import random
 
 from database import get_db
 from models import Series, Game, Team, ScoreButton, TeamScore, Song, AdminSetting
@@ -286,7 +287,10 @@ def update_team(tid: int, data: TeamUpdate, db: Session = Depends(get_db)):
     t = db.query(Team).get(tid)
     if not t:
         raise HTTPException(404, "Team not found")
-    t.name = data.name
+    if data.name is not None:
+        t.name = data.name
+    if data.start_order is not None:
+        t.start_order = data.start_order if data.start_order > 0 else None
     db.commit()
     db.refresh(t)
     return t
@@ -300,6 +304,24 @@ def delete_team(tid: int, db: Session = Depends(get_db)):
     db.delete(t)
     db.commit()
     return {"ok": True}
+
+
+@router.post("/games/{gid}/randomize")
+def randomize_start_order(gid: int, db: Session = Depends(get_db)):
+    game = db.query(Game).get(gid)
+    if not game:
+        raise HTTPException(404, "Game not found")
+    if game.status == "running":
+        raise HTTPException(400, "Cannot randomize while game is running")
+    teams = db.query(Team).filter(Team.game_id == gid).all()
+    if not teams:
+        raise HTTPException(400, "No teams in this game")
+    orders = list(range(1, len(teams) + 1))
+    random.shuffle(orders)
+    for team, order in zip(teams, orders):
+        team.start_order = order
+    db.commit()
+    return {"ok": True, "count": len(teams)}
 
 
 # ── Score Buttons ───────────────────────────────────────
@@ -502,6 +524,7 @@ def dashboard_data(db: Session = Depends(get_db)):
                 "team_name": t.name,
                 "game_id": t.game_id,
                 "game_name": t.game.name,
+                "start_order": t.start_order,
                 "total_points": total,
                 "details": details,
                 "_tiebreaker": tiebreaker,
@@ -649,6 +672,7 @@ def export_database(db: Session = Depends(get_db), _auth=Depends(_require_admin)
     for t in db.query(Team).all():
         data["teams"].append({
             "id": t.id, "name": t.name, "game_id": t.game_id,
+            "start_order": t.start_order,
             "created_at": t.created_at.isoformat() if t.created_at else None,
         })
     for b in db.query(ScoreButton).all():
@@ -725,6 +749,7 @@ async def import_database(file: UploadFile = File(...), db: Session = Depends(ge
     for t in data["teams"]:
         db.add(Team(
             id=t["id"], name=t["name"], game_id=t["game_id"],
+            start_order=t.get("start_order"),
             created_at=datetime.fromisoformat(t["created_at"]) if t.get("created_at") else datetime.utcnow(),
         ))
     db.flush()
