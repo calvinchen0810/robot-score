@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="/static/style.css">
   <style>
     body { background: #ffffff; }
-    .dashboard-wrap { max-width: 1100px; margin: 0 auto; padding: 20px 24px; }
+    .dashboard-wrap { max-width: 1100px; margin: 0 auto; padding: 20px 24px; padding-top: 56px; }
     .section-title {
       font-size: 1.1rem; color: #64748b; text-transform: uppercase;
       letter-spacing: 1px; margin: 28px 0 12px; border-bottom: 1px solid #e2e8f0;
@@ -83,6 +83,15 @@
   </style>
 </head>
 <body>
+  <!-- Top toolbar -->
+  <div id="toggleBar" style="display:none;position:fixed;top:0;left:0;right:0;background:#f8fafc;border-bottom:2px solid #e2e8f0;padding:8px 16px;z-index:100">
+    <div style="max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <button id="toggleTimerBtn" onclick="toggleTimerPanel()" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">⏱ Hide Timer</button>
+      <button id="toggleGameRankBtn" onclick="toggleGameRanking()" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">🏁 Hide Game Rank</button>
+      <button id="toggleSeriesBtn" onclick="toggleSeriesRanking()" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">🏆 Show Series Rank</button>
+    </div>
+  </div>
+
   <div class="dashboard-wrap">
     <div class="dashboard-header">
       <h1 id="seriesName">🤖 Robot Score</h1>
@@ -90,7 +99,7 @@
       <!-- Planning countdown timer (visible when game not running) -->
       <div id="planningTimer" style="display:none;margin-top:12px;text-align:center">
         <div id="planningEdit" style="display:flex;align-items:center;justify-content:center;gap:8px">
-          <input type="number" id="planMin" value="12" min="0" max="99" style="width:60px;font-size:1.2rem;text-align:center;padding:6px;border:2px solid #e2e8f0;border-radius:8px"> <span style="font-size:1.2rem;color:#64748b">min</span>
+          <input type="number" id="planMin" value="10" min="0" max="99" style="width:60px;font-size:1.2rem;text-align:center;padding:6px;border:2px solid #e2e8f0;border-radius:8px"> <span style="font-size:1.2rem;color:#64748b">min</span>
           <input type="number" id="planSec" value="0" min="0" max="59" style="width:60px;font-size:1.2rem;text-align:center;padding:6px;border:2px solid #e2e8f0;border-radius:8px"> <span style="font-size:1.2rem;color:#64748b">sec</span>
           <button onclick="startPlanTimer()" style="background:#3b82f6;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer">▶ Start</button>
         </div>
@@ -104,12 +113,16 @@
     <div id="noData" class="no-data" style="display:none">No active series – waiting for game to start…</div>
 
     <div id="content" style="display:none">
-      <div class="section-title"><span class="live-dot"></span> Current Game Ranking</div>
-      <div id="gameRanking"></div>
+      <div id="timerPanel">
+      </div>
 
-      <div class="section-title" style="display:flex;align-items:center;justify-content:space-between">
+      <div id="gameRankPanel">
+        <div class="section-title"><span class="live-dot"></span> Current Game Ranking</div>
+        <div id="gameRanking"></div>
+      </div>
+
+      <div class="section-title">
         <span>All Teams – Series Ranking</span>
-        <button id="toggleSeriesBtn" onclick="toggleSeriesRanking()" style="background:#e2e8f0;color:#334155;border:none;padding:4px 12px;border-radius:6px;font-size:0.8rem;font-weight:600;cursor:pointer">Show</button>
       </div>
       <div id="allRanking" style="display:none"></div>
     </div>
@@ -142,11 +155,27 @@
       const btn = document.getElementById('toggleSeriesBtn');
       if (el.style.display === 'none') {
         el.style.display = '';
-        btn.textContent = 'Hide';
+        btn.textContent = '🏆 Hide Series Rank';
       } else {
         el.style.display = 'none';
-        btn.textContent = 'Show';
+        btn.textContent = '🏆 Show Series Rank';
       }
+    }
+
+    let timerVisible = true;
+    let gameRankVisible = true;
+
+    function toggleTimerPanel() {
+      timerVisible = !timerVisible;
+      document.getElementById('timerPanel').style.display = timerVisible ? '' : 'none';
+      document.getElementById('planningTimer').style.display = timerVisible ? '' : 'none';
+      document.getElementById('toggleTimerBtn').textContent = timerVisible ? '⏱ Hide Timer' : '⏱ Show Timer';
+    }
+
+    function toggleGameRanking() {
+      gameRankVisible = !gameRankVisible;
+      document.getElementById('gameRankPanel').style.display = gameRankVisible ? '' : 'none';
+      document.getElementById('toggleGameRankBtn').textContent = gameRankVisible ? '🏁 Hide Game Rank' : '🏁 Show Game Rank';
     }
 
     // Store previous rank positions per container
@@ -245,7 +274,7 @@
       const secs = rem % 60;
       const el = document.getElementById('planCountdown');
       el.textContent = '⏱ ' + mins + ':' + String(secs).padStart(2, '0');
-      el.style.color = rem <= 180 ? '#dc2626' : rem <= 360 ? '#f59e0b' : '#3b82f6';
+      el.style.color = rem <= 180 ? '#dc2626' : rem <= 300 ? '#f59e0b' : '#3b82f6';
       if (rem <= 0) {
         clearInterval(planInterval);
         planInterval = null;
@@ -264,6 +293,7 @@
 
     function updatePlanTimerVisibility(activeGame) {
       const el = document.getElementById('planningTimer');
+      if (!timerVisible) { el.style.display = 'none'; return; }
       if (!activeGame || activeGame.status !== 'running') {
         el.style.display = '';
       } else {
@@ -279,12 +309,15 @@
         if (!d.series) {
           document.getElementById('noData').style.display = '';
           document.getElementById('content').style.display = 'none';
+          document.getElementById('toggleBar').style.display = 'none';
           return;
         }
         document.getElementById('noData').style.display = 'none';
         document.getElementById('content').style.display = '';
+        document.getElementById('toggleBar').style.display = '';
         document.getElementById('seriesName').textContent = '🤖 ' + d.series.name;
-        document.getElementById('gameBadge').innerHTML = d.active_game
+        const timerTarget = document.getElementById('timerPanel');
+        timerTarget.innerHTML = d.active_game
           ? '<div class="game-badge">'
             + (d.active_game.status === 'running' ? '<span class="live-dot"></span>' : '')
             + esc(d.active_game.name)
@@ -293,6 +326,7 @@
             + '</div>'
             + formatTimer(d.active_game)
           : '<div class="game-badge" style="color:#94a3b8">No active game</div>';
+        document.getElementById('gameBadge').innerHTML = '';
 
         renderRanking(document.getElementById('gameRanking'), d.game_ranking);
         renderRanking(document.getElementById('allRanking'), d.all_ranking);
