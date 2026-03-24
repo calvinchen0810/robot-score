@@ -16,6 +16,7 @@
       <button class="tab" onclick="switchTab('tabButtons')">Buttons</button>
       <button class="tab" onclick="switchTab('tabScores')">Scores</button>
       <button class="tab" onclick="switchTab('tabSongs')">Songs</button>
+      <button class="tab" onclick="switchTab('tabDatabase')">Database</button>
     </div>
 
     <!-- ═══ TAB: Series & Games ═══════════════════════ -->
@@ -79,6 +80,21 @@
         <label>Display order</label>
         <input type="number" id="songOrder" value="0" min="0">
         <button class="btn btn-primary btn-block btn-sm mt-2" onclick="createSong()">Add Song</button>
+      </div>
+    </div>
+    <!-- ═══ TAB: Database ═════════════════════════════════════ -->
+    <div id="tabDatabase" class="tab-panel">
+      <div class="card">
+        <h3>📤 Export Database</h3>
+        <p class="text-sm text-muted mb-2">Download the entire database as a JSON file</p>
+        <button class="btn btn-primary btn-block btn-sm mt-2" onclick="exportDB()">Export JSON</button>
+      </div>
+      <div class="card">
+        <h3>📥 Import Database</h3>
+        <p class="text-sm text-muted mb-2" style="color:#dc2626">⚠️ This will replace ALL existing data!</p>
+        <input type="file" id="importFile" accept=".json" style="margin-bottom:8px">
+        <button class="btn btn-danger btn-block btn-sm mt-2" onclick="importDB()">Import JSON</button>
+        <div id="importStatus" class="mt-2"></div>
       </div>
     </div>  </div>
 
@@ -522,6 +538,39 @@
       if (!confirm('Delete this song?')) return;
       await api('/api/songs/' + id, { method: 'DELETE' });
       loadSongs();
+    }
+
+    /* ── Database Export / Import ──────────────────────── */
+    function exportDB() {
+      const a = document.createElement('a');
+      a.href = '/api/admin/export';
+      a.download = 'robot_score_backup.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    async function importDB() {
+      const fileInput = document.getElementById('importFile');
+      const statusEl = document.getElementById('importStatus');
+      if (!fileInput.files.length) { alert('Please select a JSON file'); return; }
+      if (!confirm('This will REPLACE all existing data. Are you sure?')) return;
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      statusEl.innerHTML = '<span style="color:#3b82f6">Importing…</span>';
+      try {
+        const res = await fetch('/api/admin/import', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (res.ok) {
+          statusEl.innerHTML = '<span style="color:#16a34a">✅ Import successful!</span>';
+          fileInput.value = '';
+          loadSeries();
+        } else {
+          statusEl.innerHTML = '<span style="color:#dc2626">❌ ' + (data.detail || 'Import failed') + '</span>';
+        }
+      } catch (e) {
+        statusEl.innerHTML = '<span style="color:#dc2626">❌ Error: ' + e.message + '</span>';
+      }
     }
 
     loadSeries();

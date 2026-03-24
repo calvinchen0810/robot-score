@@ -1,7 +1,9 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import List
+import json
 
 from database import get_db
 from models import Series, Game, Team, ScoreButton, TeamScore, Song
@@ -555,3 +557,125 @@ def delete_song(sid: int, db: Session = Depends(get_db)):
     db.delete(s)
     db.commit()
     return {"ok": True}
+
+
+# ── Export / Import Database ──────────────────────────────
+
+@router.get("/admin/export")
+def export_database(db: Session = Depends(get_db)):
+    """Export entire database as JSON."""
+    data = {
+        "series": [],
+        "games": [],
+        "teams": [],
+        "score_buttons": [],
+        "team_scores": [],
+        "songs": [],
+    }
+    for s in db.query(Series).all():
+        data["series"].append({
+            "id": s.id, "name": s.name, "is_active": s.is_active,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+        })
+    for g in db.query(Game).all():
+        data["games"].append({
+            "id": g.id, "name": g.name, "series_id": g.series_id,
+            "is_active": g.is_active, "status": g.status,
+            "duration_seconds": g.duration_seconds,
+            "started_at": g.started_at.isoformat() if g.started_at else None,
+            "created_at": g.created_at.isoformat() if g.created_at else None,
+        })
+    for t in db.query(Team).all():
+        data["teams"].append({
+            "id": t.id, "name": t.name, "game_id": t.game_id,
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+        })
+    for b in db.query(ScoreButton).all():
+        data["score_buttons"].append({
+            "id": b.id, "label": b.label, "image_url": b.image_url,
+            "points": b.points, "max_clicks": b.max_clicks,
+            "max_clicks_game": b.max_clicks_game,
+            "display_order": b.display_order, "is_active": b.is_active,
+            "series_id": b.series_id,
+        })
+    for ts in db.query(TeamScore).all():
+        data["team_scores"].append({
+            "id": ts.id, "team_id": ts.team_id,
+            "button_id": ts.button_id, "clicks": ts.clicks,
+        })
+    for sg in db.query(Song).all():
+        data["songs"].append({
+            "id": sg.id, "title": sg.title, "url": sg.url,
+            "display_order": sg.display_order, "series_id": sg.series_id,
+        })
+    return JSONResponse(
+        content=data,
+        headers={"Content-Disposition": "attachment; filename=robot_score_backup.json"},
+    )
+
+
+@router.post("/admin/import")
+async def import_database(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Import database from JSON file, replacing all existing data."""
+    content = await file.read()
+    try:
+        data = json.loads(content)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise HTTPException(400, "Invalid JSON file")
+
+    required_keys = {"series", "games", "teams", "score_buttons", "team_scores", "songs"}
+    if not required_keys.issubset(data.keys()):
+        raise HTTPException(400, f"Missing keys. Required: {required_keys}")
+
+    # Clear existing data in correct order (foreign key deps)
+    db.query(TeamScore).delete()
+    db.query(Team).delete()
+    db.query(Game).delete()
+    db.query(ScoreButton).delete()
+    db.query(Song).delete()
+    db.query(Series).delete()
+    db.flush()
+
+    # Re-insert in dependency order
+    for s in data["series"]:
+        db.add(Series(
+            id=s["id"], name=s["name"], is_active=s.get("is_active", True),
+            created_at=datetime.fromisoformat(s["created_at"]) if s.get("created_at") else datetime.utcnow(),
+        ))
+    db.flush()
+    for g in data["games"]:
+        db.add(Game(
+            id=g["id"], name=g["name"], series_id=g["series_id"],
+            is_active=g.get("is_active", False), status=g.get("status", "stopped"),
+            duration_seconds=g.get("duration_seconds"),
+            started_at=datetime.fromisoformat(g["started_at"]) if g.get("started_at") else None,
+            created_at=datetime.fromisoformat(g["created_at"]) if g.get("created_at") else datetime.utcnow(),
+        ))
+    db.flush()
+    for b in data["score_buttons"]:
+        db.add(ScoreButton(
+            id=b["id"], label=b["label"], image_url=b.get("image_url"),
+            points=b.get("points", 1), max_clicks=b.get("max_clicks"),
+            max_clicks_game=b.get("max_clicks_game"),
+            display_order=b.get("display_order", 0),
+            is_active=b.get("is_active", True), series_id=b["series_id"],
+        ))
+    db.flush()
+    for t in data["teams"]:
+        db.add(Team(
+            id=t["id"], name=t["name"], game_id=t["game_id"],
+            created_at=datetime.fromisoformat(t["created_at"]) if t.get("created_at") else datetime.utcnow(),
+        ))
+    db.flush()
+    for ts in data["team_scores"]:
+        db.add(TeamScore(
+            id=ts["id"], team_id=ts["team_id"],
+            button_id=ts["button_id"], clicks=ts.get("clicks", 0),
+        ))
+    for sg in data["songs"]:
+        db.add(Song(
+            id=sg["id"], title=sg["title"], url=sg["url"],
+            display_order=sg.get("display_order", 0), series_id=sg["series_id"],
+        ))
+    db.commit()
+    return {"ok": True, "message": "Database imported successfully"}
