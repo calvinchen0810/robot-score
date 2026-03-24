@@ -17,6 +17,10 @@ class GameCreate(BaseModel):
     series_id: int
     duration_seconds: Optional[float] = None
 
+class GameUpdate(BaseModel):
+    name: Optional[str] = None
+    duration_seconds: Optional[float] = None
+
 class GameOut(BaseModel):
     id: int
     name: str

@@ -12,7 +12,7 @@ from database import get_db
 from models import Series, Game, Team, ScoreButton, TeamScore, Song, AdminSetting
 from schemas import (
     SeriesCreate, SeriesOut,
-    GameCreate, GameOut,
+    GameCreate, GameUpdate, GameOut,
     TeamCreate, TeamUpdate, TeamOut,
     ScoreButtonCreate, ScoreButtonUpdate, ScoreButtonOut,
     ScoreAction, TeamScoreOut, TeamScoreManual,
@@ -24,6 +24,9 @@ router = APIRouter(prefix="/api")
 # ── Admin auth helpers ────────────────────────────────────
 _DEFAULT_PASSWORD = "admin123"
 _admin_tokens: set = set()
+
+# Last draw event (in-memory, for dashboard animation)
+_last_draw: dict = {}
 
 
 def _hash_pw(password: str) -> str:
@@ -85,23 +88,26 @@ def _remaining(game):
     """Compute seconds remaining for a game timer. Returns None if no timer."""
     if game.duration_seconds is None:
         return None
+    base = game.paused_remaining if game.paused_remaining is not None else game.duration_seconds
     if game.status == "running" and game.started_at:
         elapsed = (datetime.now(timezone.utc) - game.started_at.replace(tzinfo=timezone.utc)).total_seconds()
-        return max(0, game.duration_seconds - elapsed)
+        return max(0, base - elapsed)
     if game.status == "paused":
-        return max(0, game.duration_seconds)
-    return 0
+        return max(0, base)
+    return game.duration_seconds
 
 
 def _check_auto_stop(game, db):
     """Auto-stop game if timer expired. Returns True if stopped."""
     if game.status != "running" or game.duration_seconds is None or not game.started_at:
         return False
+    base = game.paused_remaining if game.paused_remaining is not None else game.duration_seconds
     elapsed = (datetime.now(timezone.utc) - game.started_at.replace(tzinfo=timezone.utc)).total_seconds()
-    if elapsed >= game.duration_seconds:
+    if elapsed >= base:
         game.status = "stopped"
         game.is_active = False
         game.started_at = None
+        game.paused_remaining = None
         db.commit()
         return True
     return False
@@ -187,6 +193,19 @@ def create_game(data: GameCreate, db: Session = Depends(get_db)):
     return _game_out(g)
 
 
+@router.put("/games/{gid}")
+def update_game(gid: int, data: GameUpdate, db: Session = Depends(get_db)):
+    g = db.query(Game).get(gid)
+    if not g:
+        raise HTTPException(404, "Game not found")
+    if data.name is not None:
+        g.name = data.name
+    if data.duration_seconds is not None:
+        g.duration_seconds = data.duration_seconds if data.duration_seconds > 0 else None
+    db.commit()
+    return _game_out(g)
+
+
 @router.put("/games/{gid}/open")
 def open_game(gid: int, db: Session = Depends(get_db)):
     """Make game visible for team joining, but don't start scoring yet."""
@@ -197,6 +216,7 @@ def open_game(gid: int, db: Session = Depends(get_db)):
     db.query(Game).filter(Game.series_id == game.series_id).update({Game.is_active: False, Game.status: "stopped", Game.started_at: None})
     game.is_active = True
     game.status = "stopped"
+    game.paused_remaining = None
     db.commit()
     return {"ok": True}
 
@@ -211,6 +231,7 @@ def activate_game(gid: int, db: Session = Depends(get_db)):
         db.query(Game).filter(Game.series_id == game.series_id).update({Game.is_active: False, Game.status: "stopped", Game.started_at: None})
         game.is_active = True
     game.status = "running"
+    game.paused_remaining = None
     game.started_at = datetime.now(timezone.utc)
     db.commit()
     return {"ok": True}
@@ -223,10 +244,11 @@ def pause_game(gid: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Game not found")
     if game.status != "running":
         raise HTTPException(400, "Game is not running")
-    # Save remaining time into duration_seconds
+    # Save remaining time into paused_remaining (preserve original duration_seconds)
     if game.duration_seconds is not None and game.started_at:
+        base = game.paused_remaining if game.paused_remaining is not None else game.duration_seconds
         elapsed = (datetime.now(timezone.utc) - game.started_at.replace(tzinfo=timezone.utc)).total_seconds()
-        game.duration_seconds = max(0, game.duration_seconds - elapsed)
+        game.paused_remaining = max(0, base - elapsed)
     game.status = "paused"
     game.started_at = None
     db.commit()
@@ -253,6 +275,7 @@ def stop_game(gid: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Game not found")
     game.status = "stopped"
     game.is_active = False
+    game.paused_remaining = None
     db.commit()
     return {"ok": True}
 
@@ -308,6 +331,7 @@ def delete_team(tid: int, db: Session = Depends(get_db)):
 
 @router.post("/games/{gid}/randomize")
 def randomize_start_order(gid: int, db: Session = Depends(get_db)):
+    global _last_draw
     game = db.query(Game).get(gid)
     if not game:
         raise HTTPException(404, "Game not found")
@@ -321,6 +345,15 @@ def randomize_start_order(gid: int, db: Session = Depends(get_db)):
     for team, order in zip(teams, orders):
         team.start_order = order
     db.commit()
+    results = [
+        {"name": t.name, "start_order": o, "team_index": i}
+        for i, (t, o) in enumerate(zip(teams, orders))
+    ]
+    _last_draw = {
+        "game_id": gid,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "results": results,
+    }
     return {"ok": True, "count": len(teams)}
 
 
@@ -554,6 +587,7 @@ def dashboard_data(db: Session = Depends(get_db)):
         "games": [{"id": g.id, "name": g.name, "is_active": g.is_active, "status": g.status} for g in games],
         "buttons": [{"id": b.id, "label": b.label, "points": b.points} for b in buttons],
         "songs": [{"id": s.id, "title": s.title, "url": s.url} for s in songs],
+        "draw_event": _last_draw if (active_game and _last_draw.get("game_id") == active_game.id) else None,
     }
 
 
@@ -666,6 +700,7 @@ def export_database(db: Session = Depends(get_db), _auth=Depends(_require_admin)
             "id": g.id, "name": g.name, "series_id": g.series_id,
             "is_active": g.is_active, "status": g.status,
             "duration_seconds": g.duration_seconds,
+            "paused_remaining": g.paused_remaining,
             "started_at": g.started_at.isoformat() if g.started_at else None,
             "created_at": g.created_at.isoformat() if g.created_at else None,
         })
@@ -733,6 +768,7 @@ async def import_database(file: UploadFile = File(...), db: Session = Depends(ge
             id=g["id"], name=g["name"], series_id=g["series_id"],
             is_active=g.get("is_active", False), status=g.get("status", "stopped"),
             duration_seconds=g.get("duration_seconds"),
+            paused_remaining=g.get("paused_remaining"),
             started_at=datetime.fromisoformat(g["started_at"]) if g.get("started_at") else None,
             created_at=datetime.fromisoformat(g["created_at"]) if g.get("created_at") else datetime.utcnow(),
         ))

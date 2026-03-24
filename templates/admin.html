@@ -222,7 +222,22 @@
       el.innerHTML = games.map(g => buildGameRow(g, sid)).join('');
     }
 
+    // Track which game is being edited
+    let editingGameId = null;
+
     function buildGameRow(g, sid) {
+      // Edit mode
+      if (editingGameId === g.id) {
+        return '<div id="grow_' + g.id + '" style="padding:6px 0;border-bottom:1px solid #e2e8f0">' 
+          + '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
+          + '  <input type="text" id="eg_name_' + g.id + '" value="' + esc(g.name) + '" style="flex:1;min-width:100px;margin:0" placeholder="Game name">'
+          + '  <input type="number" id="eg_timer_' + g.id + '" value="' + (g.duration_seconds || 0) + '" min="0" style="width:80px;margin:0" placeholder="Timer (s)">'
+          + '  <span class="text-sm text-muted">sec</span>'
+          + '  <button class="btn btn-success btn-sm" onclick="saveGame(' + g.id + ',' + sid + ')">Save</button>'
+          + '  <button class="btn btn-sm" style="background:#e2e8f0;color:#334155" onclick="cancelEditGame(' + sid + ')">Cancel</button>'
+          + '</div></div>';
+      }
+
       let badge = '';
       if (g.status === 'running') badge = '<span class="badge badge-active">RUNNING</span>';
       else if (g.status === 'paused') badge = '<span class="badge" style="background:#f59e0b33;color:#f59e0b">PAUSED</span>';
@@ -265,9 +280,10 @@
       return '<div id="grow_' + g.id + '" class="flex justify-between items-center" style="padding:4px 0">'
         + '<span class="text-sm">' + esc(g.name) + timerHtml + ' ' + badge + '</span>'
         + '<div class="flex gap-2">'
+        + '<button class="btn btn-sm" style="background:#e2e8f0;color:#334155" onclick="editGame(' + g.id + ',' + sid + ')">✏️</button>'
         + controls
         + '<button class="btn btn-danger btn-sm" onclick="deleteGame(' + g.id + ',' + sid + ')">✕</button>'
-        + '</div></div>';
+        + '</div></div>';;
     }
 
     // Lightweight refresh: only update game rows in-place without touching inputs
@@ -335,6 +351,28 @@
     async function deleteGame(gid, sid) {
       if (!confirm('Delete this game and all its teams?')) return;
       await api('/api/games/' + gid, { method:'DELETE' });
+      loadGames(sid);
+    }
+
+    function editGame(gid, sid) {
+      editingGameId = gid;
+      loadGames(sid);
+    }
+
+    function cancelEditGame(sid) {
+      editingGameId = null;
+      loadGames(sid);
+    }
+
+    async function saveGame(gid, sid) {
+      const name = document.getElementById('eg_name_' + gid).value.trim();
+      const timer = parseFloat(document.getElementById('eg_timer_' + gid).value) || 0;
+      if (!name) return alert('Name is required');
+      await api('/api/games/' + gid, {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ name, duration_seconds: timer })
+      });
+      editingGameId = null;
       loadGames(sid);
     }
 

@@ -3,11 +3,19 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 
+from sqlalchemy import inspect, text
 from database import engine, Base
 from routes import router as api_router
 
 # Create tables on startup
 Base.metadata.create_all(bind=engine)
+
+# Lightweight migration: add missing columns
+with engine.connect() as conn:
+    cols = [c["name"] for c in inspect(engine).get_columns("games")]
+    if "paused_remaining" not in cols:
+        conn.execute(text("ALTER TABLE games ADD COLUMN paused_remaining FLOAT"))
+        conn.commit()
 
 app = FastAPI(title="Robot Score")
 
