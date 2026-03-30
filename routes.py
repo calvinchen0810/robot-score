@@ -706,6 +706,20 @@ def delete_song(sid: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+@router.put("/songs/{sid}", response_model=SongOut)
+def update_song(sid: int, data: SongCreate, db: Session = Depends(get_db)):
+    s = db.query(Song).get(sid)
+    if not s:
+        raise HTTPException(404, "Song not found")
+    # Update allowed fields
+    s.title = data.title
+    s.url = data.url
+    s.display_order = data.display_order
+    db.commit()
+    db.refresh(s)
+    return s
+
+
 # ── Export / Import Database ──────────────────────────────
 
 @router.get("/admin/export")

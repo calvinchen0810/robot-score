@@ -614,12 +614,49 @@
       const songs = await api('/api/series/' + activeSeries.id + '/songs');
       const el = document.getElementById('songList');
       if (!songs.length) { el.innerHTML = '<p class="text-sm text-muted">No songs yet</p>'; return; }
-      el.innerHTML = songs.map(s =>
-        '<div class="flex justify-between items-center" style="padding:4px 0;border-bottom:1px solid #f1f5f9">'
-        + '<div><strong>' + esc(s.title) + '</strong><br><span class="text-sm text-muted" style="word-break:break-all">' + esc(s.url) + '</span></div>'
-        + '<button class="btn btn-danger btn-sm" onclick="deleteSong(' + s.id + ')">✕</button>'
-        + '</div>'
-      ).join('');
+      el.innerHTML = songs.map(s => {
+        if (editingSongId === s.id) {
+          return '<div class="card" style="padding:8px;margin:6px 0">'
+            + '<label>Title</label>'
+            + '<input type="text" id="es_title_' + s.id + '" value="' + esc(s.title) + '">'
+            + '<label>URL</label>'
+            + '<input type="url" id="es_url_' + s.id + '" value="' + esc(s.url) + '">'
+            + '<label>Display order</label>'
+            + '<input type="number" id="es_order_' + s.id + '" value="' + (s.display_order || 0) + '" min="0">'
+            + '<div class="flex gap-2 mt-2">'
+            + '  <button class="btn btn-success btn-sm" onclick="saveSong(' + s.id + ')">Save</button>'
+            + '  <button class="btn btn-sm" style="background:#e2e8f0;color:#334155" onclick="cancelEditSong()">Cancel</button>'
+            + '</div></div>';
+        }
+        return '<div class="flex justify-between items-center" style="padding:4px 0;border-bottom:1px solid #f1f5f9">'
+          + '<div><strong>' + esc(s.title) + '</strong><br><span class="text-sm text-muted" style="word-break:break-all">' + esc(s.url) + '</span></div>'
+          + '<div class="flex gap-2">'
+          + '<button class="btn btn-sm" style="background:#e2e8f0;color:#334155" onclick="editSong(' + s.id + ')">✏️</button>'
+          + '<button class="btn btn-danger btn-sm" onclick="deleteSong(' + s.id + ')">✕</button>'
+          + '</div></div>';
+      }).join('');
+    }
+
+    let editingSongId = null;
+
+    function editSong(id) {
+      editingSongId = id;
+      loadSongs();
+    }
+
+    function cancelEditSong() {
+      editingSongId = null;
+      loadSongs();
+    }
+
+    async function saveSong(id) {
+      const title = document.getElementById('es_title_' + id).value.trim();
+      const url = document.getElementById('es_url_' + id).value.trim();
+      const order = parseInt(document.getElementById('es_order_' + id).value) || 0;
+      if (!title || !url) return alert('Title and URL required');
+      await api('/api/songs/' + id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ title, url, display_order: order }) });
+      editingSongId = null;
+      loadSongs();
     }
 
     async function createSong() {
