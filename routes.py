@@ -579,6 +579,14 @@ def dashboard_data(db: Session = Depends(get_db)):
 
     songs = db.query(Song).filter(Song.series_id == series.id).order_by(Song.display_order, Song.id).all()
 
+    # Consume draw event once: return it to the first dashboard poller after the admin triggered it,
+    # then clear it so the animation doesn't repeatedly show for later visitors.
+    draw_to_send = None
+    global _last_draw
+    if active_game and isinstance(_last_draw, dict) and _last_draw.get("game_id") == active_game.id:
+        draw_to_send = _last_draw
+        _last_draw = {}
+
     return {
         "series": {"id": series.id, "name": series.name},
         "active_game": {"id": active_game.id, "name": active_game.name, "status": active_game.status, "remaining_seconds": _remaining(active_game)} if active_game else None,
@@ -587,7 +595,7 @@ def dashboard_data(db: Session = Depends(get_db)):
         "games": [{"id": g.id, "name": g.name, "is_active": g.is_active, "status": g.status} for g in games],
         "buttons": [{"id": b.id, "label": b.label, "points": b.points} for b in buttons],
         "songs": [{"id": s.id, "title": s.title, "url": s.url} for s in songs],
-        "draw_event": _last_draw if (active_game and _last_draw.get("game_id") == active_game.id) else None,
+        "draw_event": draw_to_send,
     }
 
 
