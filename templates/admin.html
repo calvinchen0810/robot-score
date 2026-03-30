@@ -121,6 +121,14 @@
         <button class="btn btn-danger btn-block btn-sm mt-2" onclick="importDB()">Import JSON</button>
         <div id="importStatus" class="mt-2"></div>
       </div>
+      <div class="card">
+        <h3>🔗 QR Code (Dashboard)</h3>
+        <p class="text-sm text-muted mb-2">Set a QR image URL to show on the dashboard (optional).</p>
+        <label>QR Image URL</label>
+        <input type="url" id="qrUrl" placeholder="https://.../qr.png">
+        <button class="btn btn-primary btn-block btn-sm mt-2" onclick="saveAdminQr()">Save QR</button>
+        <div id="qrStatus" class="mt-2"></div>
+      </div>
     </div>  </div>
 
   <script>
@@ -676,6 +684,7 @@
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('adminPanel').style.display = '';
       loadSeries();
+      loadAdminSettings();
     }
 
     // On page load, check if stored token is still valid
@@ -713,6 +722,34 @@
       } catch(e) {
         st.innerHTML = '<span style="color:#dc2626">❌ ' + e.message + '</span>';
       }
+    }
+
+    // Load admin-specific settings (QR image)
+    async function loadAdminSettings() {
+      try {
+        const res = await fetch('/api/admin/qr', { headers: authHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.qr_image) document.getElementById('qrUrl').value = data.qr_image;
+      } catch(e) {}
+    }
+
+    async function saveAdminQr() {
+      const url = document.getElementById('qrUrl').value.trim();
+      const st = document.getElementById('qrStatus');
+      st.innerHTML = '';
+      try {
+        const res = await fetch('/api/admin/qr', {
+          method: 'PUT', headers: Object.assign({'Content-Type':'application/json'}, authHeaders()),
+          body: JSON.stringify({ qr_image: url })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          st.innerHTML = '<span style="color:#16a34a">✅ Saved</span>';
+        } else {
+          st.innerHTML = '<span style="color:#dc2626">❌ ' + (data.detail || 'Failed') + '</span>';
+        }
+      } catch(e) { st.innerHTML = '<span style="color:#dc2626">❌ ' + e.message + '</span>'; }
     }
 
     /* ── Database Export / Import ──────────────────────── */

@@ -83,6 +83,25 @@ def admin_change_password(
     db.commit()
     return {"ok": True}
 
+@router.get("/admin/qr")
+def get_qr_image(db: Session = Depends(get_db), _auth=Depends(_require_admin)):
+    row = db.query(AdminSetting).filter(AdminSetting.key == 'qr_image').first()
+    return {"qr_image": row.value if row else None}
+
+
+@router.put("/admin/qr")
+def set_qr_image(data: dict, db: Session = Depends(get_db), _auth=Depends(_require_admin)):
+    url = data.get('qr_image') if isinstance(data, dict) else None
+    if url is None:
+        raise HTTPException(400, "qr_image is required")
+    row = db.query(AdminSetting).filter(AdminSetting.key == 'qr_image').first()
+    if row:
+        row.value = url
+    else:
+        db.add(AdminSetting(key='qr_image', value=url))
+    db.commit()
+    return {"ok": True, "qr_image": url}
+
 
 def _remaining(game):
     """Compute seconds remaining for a game timer. Returns None if no timer."""
@@ -596,6 +615,8 @@ def dashboard_data(db: Session = Depends(get_db)):
         "buttons": [{"id": b.id, "label": b.label, "points": b.points} for b in buttons],
         "songs": [{"id": s.id, "title": s.title, "url": s.url} for s in songs],
         "draw_event": draw_to_send,
+        "qr_image": (db.query(AdminSetting).filter(AdminSetting.key == 'qr_image').first().value
+                     if db.query(AdminSetting).filter(AdminSetting.key == 'qr_image').first() else None),
     }
 
 

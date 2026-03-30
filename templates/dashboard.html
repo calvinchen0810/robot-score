@@ -153,8 +153,9 @@
   <div id="toggleBar" style="display:none;position:fixed;top:0;left:0;right:0;background:#f8fafc;border-bottom:2px solid #e2e8f0;padding:8px 16px;z-index:100">
     <div style="max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <button id="toggleTimerBtn" onclick="toggleTimerPanel()" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">⏱ Hide Timer</button>
-      <button id="toggleGameRankBtn" onclick="toggleGameRanking()" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">🏁 Hide Game Rank</button>
+      <button id="toggleGameRankBtn" onclick="toggleGameRanking()" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">🏁 Show Game Rank</button>
       <button id="toggleSeriesBtn" onclick="toggleSeriesRanking()" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">🏆 Show Series Rank</button>
+      <button id="topToggleQrBtn" onclick="toggleQr()" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;display:none">🔗 Show QR</button>
     </div>
   </div>
 
@@ -189,12 +190,20 @@
       <div id="timerPanel">
       </div>
 
-      <div id="gameRankPanel">
+      <!-- QR Code panel: show/hide controlled by button -->
+      <div id="qrPanel" style="display:none;margin:14px auto;max-width:420px;text-align:center">
+        <div id="qrContainer" style="display:none;border:0px solid #e2e8f0;padding:12px;border-radius:8px;background:#fff;max-width:250px;margin:0 auto">
+          <img id="qrImage" src="" alt="QR code" style="width:250px;max-width:100%;height:auto;display:block;margin:0 auto;">
+          <div style="margin-top:8px;color:#64748b;font-size:0.95rem">Scan to join</div>
+        </div>
+      </div>
+
+      <div id="gameRankPanel" style="display:none">
         <div class="section-title"><span class="live-dot"></span> Current Game Ranking</div>
         <div id="gameRanking"></div>
       </div>
 
-      <div class="section-title">
+      <div id="seriesTitle" class="section-title" style="display:none">
         <span>All Teams – Series Ranking</span>
       </div>
       <div id="allRanking" style="display:none"></div>
@@ -225,18 +234,21 @@
 
     function toggleSeriesRanking() {
       const el = document.getElementById('allRanking');
+      const title = document.getElementById('seriesTitle');
       const btn = document.getElementById('toggleSeriesBtn');
       if (el.style.display === 'none') {
         el.style.display = '';
+        if (title) title.style.display = '';
         btn.textContent = '🏆 Hide Series Rank';
       } else {
         el.style.display = 'none';
+        if (title) title.style.display = 'none';
         btn.textContent = '🏆 Show Series Rank';
       }
     }
 
     let timerVisible = true;
-    let gameRankVisible = true;
+    let gameRankVisible = false;
 
     function toggleTimerPanel() {
       timerVisible = !timerVisible;
@@ -390,21 +402,56 @@
         document.getElementById('toggleBar').style.display = '';
         document.getElementById('seriesName').textContent = '🤖 ' + d.series.name;
         const timerTarget = document.getElementById('timerPanel');
-        timerTarget.innerHTML = d.active_game
-          ? '<div class="game-badge">'
-            + (d.active_game.status === 'running' ? '<span class="live-dot"></span>' : '')
-            + esc(d.active_game.name)
-            + (d.active_game.status === 'paused' ? ' <small style="opacity:0.7">⏸ PAUSED</small>' : '')
-            + (d.active_game.status === 'stopped' ? ' <small style="opacity:0.7">⏹ STOPPED</small>' : '')
-            + '</div>'
+        if (d.active_game) {
+          const statusTag = d.active_game.status === 'paused'
+            ? ' <small style="opacity:0.7">⏸ PAUSED</small>'
+            : d.active_game.status === 'stopped'
+              ? ' <small style="opacity:0.7">⏹ STOPPED</small>'
+              : '';
+          timerTarget.innerHTML = ''
             + formatTimer(d.active_game)
-          : '<div class="game-badge" style="color:#94a3b8">No active game</div>';
+            + '<div style="text-align:center;margin-top:8px">'
+            + '<div style="font-weight:800;color:#1e293b;font-size:1.25rem">' + esc(d.active_game.name) + '</div>'
+            + (statusTag ? '<div style="margin-top:6px;color:#64748b;font-size:0.9rem">' + statusTag + '</div>' : '')
+            + '</div>';
+        } else {
+          timerTarget.innerHTML = '<div class="game-badge" style="color:#94a3b8">No active game</div>';
+        }
         document.getElementById('gameBadge').innerHTML = '';
 
         renderRanking(document.getElementById('gameRanking'), d.game_ranking);
         renderRanking(document.getElementById('allRanking'), d.all_ranking);
         updatePlanTimerVisibility(d.active_game);
         updateSongList(d.songs);
+        // QR: show panel if configured in admin settings, but respect user's show/hide choice
+        try {
+          const qrPanel = document.getElementById('qrPanel');
+          const qrImg = document.getElementById('qrImage');
+          const toggleBtn = document.getElementById('topToggleQrBtn');
+          const container = document.getElementById('qrContainer');
+          // User preference persisted in localStorage as 'qr_visible' === 'false' means hidden
+          const userPref = localStorage.getItem('qr_visible');
+          const userHidden = userPref === 'false';
+          if (d.qr_image) {
+            if (qrPanel) qrPanel.style.display = '';
+            if (qrImg) qrImg.src = d.qr_image;
+            if (toggleBtn) toggleBtn.style.display = '';
+            // If user explicitly hid the QR, keep container hidden until they toggle it back
+            if (container) {
+              if (userHidden) {
+                container.style.display = 'none';
+                toggleBtn.textContent = '🔗 Show QR';
+              } else {
+                container.style.display = 'block';
+                toggleBtn.textContent = '🔗 Hide QR';
+              }
+            }
+          } else {
+            if (qrPanel) qrPanel.style.display = 'none';
+            if (qrImg) qrImg.src = '';
+            if (toggleBtn) toggleBtn.style.display = 'none';
+          }
+        } catch (e) { /* ignore */ }
         checkDrawEvent(d.draw_event);
       } catch (e) { /* retry next tick */ }
     }
@@ -431,6 +478,28 @@
           loadCurrentSong();
         }
         renderSongListPanel();
+      }
+    }
+
+    // QR panel functions (controlled from top toolbar button)
+    function toggleQr() {
+      const panel = document.getElementById('qrPanel');
+      const container = document.getElementById('qrContainer');
+      const topBtn = document.getElementById('topToggleQrBtn');
+      if (!panel || !container || !topBtn) return;
+      const visible = window.getComputedStyle(container).display !== 'none';
+      if (!visible) {
+        // show
+        panel.style.display = '';
+        container.style.display = 'block';
+        topBtn.textContent = '🔗 Hide QR';
+        localStorage.setItem('qr_visible', 'true');
+      } else {
+        // hide (but keep panel wrapper present so layout doesn't jump)
+        panel.style.display = '';
+        container.style.display = 'none';
+        topBtn.textContent = '🔗 Show QR';
+        localStorage.setItem('qr_visible', 'false');
       }
     }
 
