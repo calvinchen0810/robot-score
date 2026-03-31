@@ -578,7 +578,7 @@
       el.style.display = el.style.display === 'none' ? '' : 'none';
     }
 
-    let repeatOne = false;
+    let repeatOne = true;
 
     function toggleRepeat() {
       repeatOne = !repeatOne;
@@ -734,6 +734,14 @@
     setToggleBtnState('toggleGameRankBtn', gameRankVisible);
     // Series/title default hidden
     setToggleBtnState('toggleSeriesBtn', false);
+    // Music repeat default on (style the button active)
+    repeatOne = true;
+    const repeatBtnEl = document.getElementById('repeatBtn');
+    if (repeatBtnEl) {
+      repeatBtnEl.style.opacity = '1';
+      repeatBtnEl.style.background = '#dbeafe';
+      repeatBtnEl.style.borderRadius = '6px';
+    }
   </script>
 </body>
 </html>
