@@ -10,7 +10,7 @@
   <div class="container" id="app">
     <!-- Step 1: Join / Create team -->
     <div id="joinView">
-      <h1>🤖 邏輯機器人搶分賽</h1>
+      <h1 id="seriesLabel" style="margin:0;font-size:2rem"></h1>
       <div class="card" id="loadingMsg">
         <p class="text-center text-muted">Loading game…</p>
       </div>
@@ -18,9 +18,8 @@
         <p class="text-center text-muted">No active game right now. Please wait for admin to start one.</p>
       </div>
       <div id="gameReady" style="display:none">
-        <div class="card">
-          <p class="text-sm text-muted" id="seriesLabel"></p>
-          <h2 id="gameLabel" style="margin:0"></h2>
+        <div style="margin-bottom:8px;text-align:center">          
+          <p id="gameLabel" class="text-sm text-muted" style="margin:4px 0 0;font-size:1.2rem;font-weight:600;text-align:center"></p>
         </div>
         <div class="card" id="createTeamCard">
           <label>Your Team Name</label>
@@ -80,7 +79,7 @@
         return;
       }
       document.getElementById('gameReady').style.display = '';
-      document.getElementById('seriesLabel').textContent = d.series.name;
+      document.getElementById('seriesLabel').textContent = '🤖 ' + d.series.name;
       document.getElementById('gameLabel').textContent = d.game.name;
       // Respect admin-controlled allow_create_team flag
       try {
