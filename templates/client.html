@@ -10,7 +10,7 @@
   <div class="container" id="app">
     <!-- Step 1: Join / Create team -->
     <div id="joinView">
-      <h1>🤖 Robot Score</h1>
+      <h1>🤖 邏輯機器人搶分賽</h1>
       <div class="card" id="loadingMsg">
         <p class="text-center text-muted">Loading game…</p>
       </div>
@@ -91,7 +91,7 @@
       if (teams.length > 0) {
         document.getElementById('existingTeams').style.display = '';
         document.getElementById('teamList').innerHTML = teams.map(t =>
-          '<button class="btn btn-sm" style="margin:4px;background:#e2e8f0;color:#334155" onclick="rejoin(' + t.id + ',\'' + escHtml(t.name) + '\',' + (t.start_order || 0) + ')">' + escHtml(t.name) + (t.start_order ? ' <span style="color:#2563eb;font-weight:700">起點 #' + t.start_order + '</span>' : '') + '</button>'
+          '<button class="btn btn-sm" style="margin:4px;background:#e2e8f0;color:#334155" onclick="rejoin(' + t.id + ',\'' + escHtml(t.name) + '\',' + (t.start_order || 0) + ')">' + escHtml(t.name) + (t.start_order ? ' <span style="color:#2563eb;font-weight:700;font-size:0.85rem;display:inline-block;margin-left:6px">起點 #' + t.start_order + '</span>' : '') + '</button>'
         ).join('');
       }
     }
