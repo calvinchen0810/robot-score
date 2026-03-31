@@ -22,7 +22,7 @@
           <p class="text-sm text-muted" id="seriesLabel"></p>
           <h2 id="gameLabel" style="margin:0"></h2>
         </div>
-        <div class="card">
+        <div class="card" id="createTeamCard">
           <label>Your Team Name</label>
           <input type="text" id="teamNameInput" placeholder="Enter team name…">
           <button class="btn btn-primary btn-block mt-2" onclick="joinOrCreate()">Join Game</button>
@@ -82,6 +82,12 @@
       document.getElementById('gameReady').style.display = '';
       document.getElementById('seriesLabel').textContent = d.series.name;
       document.getElementById('gameLabel').textContent = d.game.name;
+      // Respect admin-controlled allow_create_team flag
+      try {
+        const allow = (d.allow_create_team === undefined) ? true : !!d.allow_create_team;
+        const createCard = document.getElementById('createTeamCard');
+        if (createCard) createCard.style.display = allow ? '' : 'none';
+      } catch(e) {}
       loadTeams();
     }
 

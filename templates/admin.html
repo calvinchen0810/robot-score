@@ -129,6 +129,13 @@
         <button class="btn btn-primary btn-block btn-sm mt-2" onclick="saveAdminQr()">Save QR</button>
         <div id="qrStatus" class="mt-2"></div>
       </div>
+      <div class="card">
+        <h3>👥 Client Team Creation</h3>
+        <p class="text-sm text-muted mb-2">Allow clients to create teams from the play page.</p>
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="allowCreateTeam"> <span>Allow create</span></label>
+        <button class="btn btn-primary btn-block btn-sm mt-2" onclick="saveAdminAllowCreate()">Save</button>
+        <div id="allowCreateStatus" class="mt-2"></div>
+      </div>
     </div>  </div>
 
   <script>
@@ -768,6 +775,14 @@
         if (!res.ok) return;
         const data = await res.json();
         if (data.qr_image) document.getElementById('qrUrl').value = data.qr_image;
+        // load allow_create_team setting
+        try {
+          const r2 = await fetch('/api/admin/allow_create_team', { headers: authHeaders() });
+          if (r2.ok) {
+            const d2 = await r2.json();
+            document.getElementById('allowCreateTeam').checked = !!d2.allow_create_team;
+          }
+        } catch(e) {}
       } catch(e) {}
     }
 
@@ -786,6 +801,21 @@
         } else {
           st.innerHTML = '<span style="color:#dc2626">❌ ' + (data.detail || 'Failed') + '</span>';
         }
+      } catch(e) { st.innerHTML = '<span style="color:#dc2626">❌ ' + e.message + '</span>'; }
+    }
+
+    async function saveAdminAllowCreate() {
+      const checked = document.getElementById('allowCreateTeam').checked;
+      const st = document.getElementById('allowCreateStatus');
+      st.innerHTML = '';
+      try {
+        const res = await fetch('/api/admin/allow_create_team', {
+          method: 'PUT', headers: Object.assign({'Content-Type':'application/json'}, authHeaders()),
+          body: JSON.stringify({ allow_create_team: checked })
+        });
+        const data = await res.json();
+        if (res.ok) st.innerHTML = '<span style="color:#16a34a">✅ Saved</span>';
+        else st.innerHTML = '<span style="color:#dc2626">❌ ' + (data.detail || 'Failed') + '</span>';
       } catch(e) { st.innerHTML = '<span style="color:#dc2626">❌ ' + e.message + '</span>'; }
     }
 

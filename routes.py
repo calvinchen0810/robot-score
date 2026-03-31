@@ -103,6 +103,27 @@ def set_qr_image(data: dict, db: Session = Depends(get_db), _auth=Depends(_requi
     return {"ok": True, "qr_image": url}
 
 
+@router.get("/admin/allow_create_team")
+def get_allow_create_team(db: Session = Depends(get_db), _auth=Depends(_require_admin)):
+    row = db.query(AdminSetting).filter(AdminSetting.key == 'allow_create_team').first()
+    return {"allow_create_team": (row.value == 'true') if row else True}
+
+
+@router.put("/admin/allow_create_team")
+def set_allow_create_team(data: dict, db: Session = Depends(get_db), _auth=Depends(_require_admin)):
+    val = data.get('allow_create_team') if isinstance(data, dict) else None
+    if val is None:
+        raise HTTPException(400, "allow_create_team is required")
+    vstr = 'true' if bool(val) else 'false'
+    row = db.query(AdminSetting).filter(AdminSetting.key == 'allow_create_team').first()
+    if row:
+        row.value = vstr
+    else:
+        db.add(AdminSetting(key='allow_create_team', value=vstr))
+    db.commit()
+    return {"ok": True, "allow_create_team": (vstr == 'true')}
+
+
 def _remaining(game):
     """Compute seconds remaining for a game timer. Returns None if no timer."""
     if game.duration_seconds is None:
@@ -646,6 +667,9 @@ def get_active(db: Session = Depends(get_db)):
             }
             for b in buttons
         ],
+        # Whether clients are allowed to create new teams via the client UI
+        "allow_create_team": (db.query(AdminSetting).filter(AdminSetting.key == 'allow_create_team').first().value == 'true'
+                              if db.query(AdminSetting).filter(AdminSetting.key == 'allow_create_team').first() else True),
     }
 
 
