@@ -420,18 +420,19 @@
         document.getElementById('toggleBar').style.display = '';
         document.getElementById('seriesName').textContent = '🤖 ' + d.series.name;
         const timerTarget = document.getElementById('timerPanel');
-        if (d.active_game) {
-          const statusTag = d.active_game.status === 'paused'
+        if (d.active_round) {
+          const statusTag = d.active_round.status === 'paused'
             ? ' <small style="opacity:0.7">⏸ PAUSED</small>'
-            : d.active_game.status === 'stopped'
-              ? ' <small style="opacity:0.7">⏹ STOPPED</small>'
-              : '';
+            : '';
           timerTarget.innerHTML = ''
-            + formatTimer(d.active_game)
+            + formatTimer(d.active_round)
             + '<div style="text-align:center;margin-top:8px">'
-            + '<div style="font-weight:800;color:#1e293b;font-size:1.25rem">' + esc(d.active_game.name) + '</div>'
-            + (statusTag ? '<div style="margin-top:6px;color:#64748b;font-size:0.9rem">' + statusTag + '</div>' : '')
+            + '<div style="font-weight:800;color:#1e293b;font-size:1.25rem">' + esc(d.active_game ? d.active_game.name : '') + '</div>'
+            + '<div style="color:#64748b;font-size:0.9rem">' + esc(d.active_round.name) + '</div>'
+            + (statusTag ? '<div style="margin-top:4px;color:#64748b;font-size:0.9rem">' + statusTag + '</div>' : '')
             + '</div>';
+        } else if (d.active_game) {
+          timerTarget.innerHTML = '<div style="text-align:center"><div style="font-weight:800;color:#1e293b;font-size:1.25rem">' + esc(d.active_game.name) + '</div><div style="color:#94a3b8;font-size:0.85rem;margin-top:4px">Waiting for round…</div></div>';
         } else {
           timerTarget.innerHTML = '<div class="game-badge" style="text-align:center;color:#94a3b8">No active game</div>';
         }
@@ -439,7 +440,7 @@
 
         renderRanking(document.getElementById('gameRanking'), d.game_ranking);
         renderRanking(document.getElementById('allRanking'), d.all_ranking);
-        updatePlanTimerVisibility(d.active_game);
+        updatePlanTimerVisibility(d.active_round || d.active_game);
         updateSongList(d.songs);
         // QR: show panel if configured in admin settings, but respect user's show/hide choice
         try {

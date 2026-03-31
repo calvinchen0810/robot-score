@@ -96,7 +96,7 @@
       if (teams.length > 0) {
         document.getElementById('existingTeams').style.display = '';
         document.getElementById('teamList').innerHTML = teams.map(t =>
-          '<button class="btn btn-sm" style="margin:4px;background:#e2e8f0;color:#334155" onclick="rejoin(' + t.id + ',\'' + escHtml(t.name) + '\',' + (t.start_order || 0) + ')">' + escHtml(t.name) + (t.start_order ? ' <span style="color:#2563eb;font-weight:700;font-size:0.85rem;display:inline-block;margin-left:6px">起點 #' + t.start_order + '</span>' : '') + '</button>'
+          '<button class="btn" style="margin:4px;background:#e2e8f0;color:#334155;padding:12px 20px;font-size:1rem;font-weight:600;border-radius:10px;width:100%" onclick="rejoin(' + t.id + ',\'' + escHtml(t.name) + '\',' + (t.start_order || 0) + ')">' + escHtml(t.name) + (t.start_order ? ' <span style="color:#2563eb;font-weight:700;font-size:0.95rem;display:inline-block;margin-left:6px">起點 #' + t.start_order + '</span>' : '') + '</button>'
         ).join('');
       }
     }
@@ -141,10 +141,10 @@
         clickState[b.id] = scores[b.id]?.clicks || 0;
         gameTotalState[b.id] = scores[b.id]?.game_total || 0;
       });
-      gameStatus = gameData.game?.status || 'stopped';
+      gameStatus = gameData.active_round?.status || gameData.game?.status || 'stopped';
       renderButtons();
       updateStatusBanner();
-      updateTimer(gameData.game?.remaining_seconds);
+      updateTimer(gameData.active_round?.remaining_seconds);
       // Poll game status every 3s
       if (window._statusInterval) clearInterval(window._statusInterval);
       window._statusInterval = setInterval(pollStatus, 3000);
@@ -153,7 +153,7 @@
     async function pollStatus() {
       try {
         const d = await api('/api/active');
-        const newStatus = d.game?.status || 'stopped';
+        const newStatus = d.active_round?.status || d.game?.status || 'stopped';
         // Update button config in case admin changed max limits
         if (d.buttons) gameData.buttons = d.buttons;
         if (newStatus !== gameStatus) {
@@ -161,7 +161,7 @@
           updateStatusBanner();
         }
         // Update timer
-        updateTimer(d.game?.remaining_seconds);
+        updateTimer(d.active_round?.remaining_seconds);
         // Always refresh scores from server (other teams may have scored)
         if (currentTeamId) {
           const scores = await api('/api/teams/' + currentTeamId + '/scores');

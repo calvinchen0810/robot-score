@@ -112,3 +112,24 @@ class SongOut(BaseModel):
     series_id: int
     class Config:
         from_attributes = True
+
+
+class RoundCreate(BaseModel):
+    game_id: int
+    name: Optional[str] = None
+    duration_seconds: Optional[float] = None
+
+class RoundUpdate(BaseModel):
+    name: Optional[str] = None
+    duration_seconds: Optional[float] = None
+
+class RoundOut(BaseModel):
+    id: int
+    name: str
+    game_id: int
+    round_number: int
+    status: str = "stopped"
+    duration_seconds: Optional[float] = None
+    remaining_seconds: Optional[float] = None
+    class Config:
+        from_attributes = True

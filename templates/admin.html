@@ -279,11 +279,58 @@
       const games = await api('/api/series/' + sid + '/games');
       const el = document.getElementById('games_' + sid);
       if (!games.length) { el.innerHTML = '<p class="text-sm text-muted">No games yet</p>'; return; }
+      // Build game rows then load rounds for each
       el.innerHTML = games.map(g => buildGameRow(g, sid)).join('');
+      for (const g of games) { loadRounds(g.id, sid); }
     }
 
     // Track which game is being edited
     let editingGameId = null;
+
+    // Track which games are manually expanded/collapsed (null = auto)
+    let gameExpandState = {};
+
+    function isGameExpanded(g) {
+      if (gameExpandState[g.id] !== undefined) return gameExpandState[g.id];
+      // Auto: expand if active, collapse if stopped
+      return g.is_active;
+    }
+
+    function toggleGameBody(gid) {
+      const body = document.getElementById('gbody_' + gid);
+      const chevron = document.getElementById('gchev_' + gid);
+      if (!body) return;
+      const visible = body.style.display !== 'none';
+      body.style.display = visible ? 'none' : '';
+      if (chevron) chevron.textContent = visible ? '▸' : '▾';
+      gameExpandState[gid] = !visible;
+    }
+
+    function buildGameHeaderHTML(g, sid) {
+      let badge = '';
+      if (g.status === 'running') badge = '<span class="badge badge-active">RUNNING</span>';
+      else if (g.status === 'paused') badge = '<span class="badge" style="background:#f59e0b33;color:#f59e0b">PAUSED</span>';
+      else if (g.is_active && g.status === 'stopped') badge = '<span class="badge" style="background:#3b82f633;color:#3b82f6">OPEN</span>';
+      else badge = '<span class="badge badge-inactive">STOPPED</span>';
+
+      let gameControls = '';
+      if (!g.is_active) {
+        gameControls = '<button class="btn btn-sm" style="background:#e2e8f0;color:#334155" onclick="openGame(' + g.id + ',' + sid + ')">🔓 Open</button>';
+      } else {
+        gameControls = '<button class="btn btn-sm" style="background:#dbeafe;color:#2563eb" onclick="randomizeOrder(' + g.id + ',' + sid + ')">🎲</button>'
+          + '<button class="btn btn-danger btn-sm" onclick="stopGame(' + g.id + ',' + sid + ')">⏹ Close</button>';
+      }
+
+      const expanded = isGameExpanded(g);
+      const chevron = '<span id="gchev_' + g.id + '" onclick="toggleGameBody(' + g.id + ')" style="cursor:pointer;font-size:1rem;color:#94a3b8;margin-right:4px;user-select:none">' + (expanded ? '\u25be' : '\u25b8') + '</span>';
+
+      return chevron + '<span class="text-sm" style="font-weight:700;flex:1">' + esc(g.name) + ' ' + badge + '</span>'
+        + '<div class="flex gap-2">'
+        + '<button class="btn btn-sm" style="background:#e2e8f0;color:#334155" onclick="editGame(' + g.id + ',' + sid + ')">✏️</button>'
+        + gameControls
+        + '<button class="btn btn-danger btn-sm" onclick="deleteGame(' + g.id + ',' + sid + ')">✕</button>'
+        + '</div>';
+    }
 
     function buildGameRow(g, sid) {
       // Edit mode
@@ -291,78 +338,150 @@
         return '<div id="grow_' + g.id + '" style="padding:6px 0;border-bottom:1px solid #e2e8f0">' 
           + '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
           + '  <input type="text" id="eg_name_' + g.id + '" value="' + esc(g.name) + '" style="flex:1;min-width:100px;margin:0" placeholder="Game name">'
-          + '  <input type="number" id="eg_timer_' + g.id + '" value="' + (g.duration_seconds || 0) + '" min="0" style="width:80px;margin:0" placeholder="Timer (s)">'
+          + '  <input type="number" id="eg_timer_' + g.id + '" value="' + (g.duration_seconds || 0) + '" min="0" style="width:80px;margin:0" placeholder="Default round timer (s)">'
           + '  <span class="text-sm text-muted">sec</span>'
           + '  <button class="btn btn-success btn-sm" onclick="saveGame(' + g.id + ',' + sid + ')">Save</button>'
           + '  <button class="btn btn-sm" style="background:#e2e8f0;color:#334155" onclick="cancelEditGame(' + sid + ')">Cancel</button>'
           + '</div></div>';
       }
 
+      const expanded = isGameExpanded(g);
+      return '<div id="grow_' + g.id + '" style="padding:6px 0;border-bottom:1px solid #e2e8f0">'
+        + '<div id="gheader_' + g.id + '" class="flex justify-between items-center">'
+        + buildGameHeaderHTML(g, sid)
+        + '</div>'
+        + '<div id="gbody_' + g.id + '" style="' + (expanded ? '' : 'display:none') + '">'
+        + '<div id="rounds_' + g.id + '" style="margin:4px 0 4px 16px;font-size:0.85rem"></div>'
+        + '<div style="margin-left:16px;margin-bottom:4px">'
+        + '<button class="btn btn-sm" style="background:#f1f5f9;color:#334155;font-size:0.75rem;padding:2px 10px" onclick="addRound(' + g.id + ',' + sid + ')">+ Round</button>'
+        + '</div>'
+        + '</div>'
+        + '</div>';
+    }
+
+    // ── Rounds ───────────────────────────────────
+    async function loadRounds(gid, sid) {
+      try {
+        const rounds = await api('/api/games/' + gid + '/rounds');
+        const el = document.getElementById('rounds_' + gid);
+        if (!el) return;
+        if (!rounds.length) { el.innerHTML = '<span class="text-muted" style="font-size:0.8rem">No rounds yet</span>'; return; }
+        el.innerHTML = rounds.map(r => buildRoundRow(r, gid, sid)).join('');
+      } catch(e) {}
+    }
+
+    function buildRoundRow(r, gid, sid) {
       let badge = '';
-      if (g.status === 'running') badge = '<span class="badge badge-active">RUNNING</span>';
-      else if (g.status === 'paused') badge = '<span class="badge" style="background:#f59e0b33;color:#f59e0b">PAUSED</span>';
-      else if (g.is_active && g.status === 'stopped') badge = '<span class="badge" style="background:#3b82f633;color:#3b82f6">OPEN</span>';
-      else badge = '<span class="badge badge-inactive">STOPPED</span>';
+      if (r.status === 'running') badge = '<span class="badge badge-active" style="font-size:0.65rem">RUN</span>';
+      else if (r.status === 'paused') badge = '<span class="badge" style="background:#f59e0b33;color:#f59e0b;font-size:0.65rem">PAUSE</span>';
 
       let timerHtml = '';
-      if (g.remaining_seconds != null) {
-        const rem = Math.max(0, Math.ceil(g.remaining_seconds));
+      if (r.remaining_seconds != null && r.status !== 'stopped') {
+        const rem = Math.max(0, Math.ceil(r.remaining_seconds));
         const mins = Math.floor(rem / 60);
         const secs = rem % 60;
-        const timeStr = mins + ':' + String(secs).padStart(2, '0');
         const color = rem <= 10 ? '#dc2626' : rem <= 30 ? '#f59e0b' : '#16a34a';
-        timerHtml = ' <span style="font-weight:700;color:' + color + ';font-size:0.85rem">\u23f1 ' + timeStr + '</span>';
-      } else if (g.duration_seconds != null && g.status === 'stopped') {
-        const dur = Math.ceil(g.duration_seconds);
+        timerHtml = ' <span style="font-weight:700;color:' + color + '">\u23f1 ' + mins + ':' + String(secs).padStart(2, '0') + '</span>';
+      } else if (r.duration_seconds != null && r.status === 'stopped') {
+        const dur = Math.ceil(r.duration_seconds);
         const mins = Math.floor(dur / 60);
         const secs = dur % 60;
-        timerHtml = ' <span style="color:#94a3b8;font-size:0.8rem">\u23f1 ' + mins + ':' + String(secs).padStart(2, '0') + '</span>';
+        timerHtml = ' <span style="color:#94a3b8">\u23f1 ' + mins + ':' + String(secs).padStart(2, '0') + '</span>';
       }
 
       let controls = '';
-      if (g.status === 'running') {
-        controls = '<button class="btn btn-warning btn-sm" onclick="pauseGame(' + g.id + ',' + sid + ')">⏸</button>'
-          + '<button class="btn btn-danger btn-sm" onclick="stopGame(' + g.id + ',' + sid + ')">⏹</button>';
-      } else if (g.status === 'paused') {
-        controls = '<button class="btn btn-success btn-sm" onclick="resumeGame(' + g.id + ',' + sid + ')">▶</button>'
-          + '<button class="btn btn-danger btn-sm" onclick="stopGame(' + g.id + ',' + sid + ')">⏹</button>';
-      } else if (g.is_active && g.status === 'stopped') {
-        // Game is open for joining but not started yet
-        controls = '<button class="btn btn-sm" style="background:#dbeafe;color:#2563eb" onclick="randomizeOrder(' + g.id + ',' + sid + ')">🎲</button>'
-          + '<button class="btn btn-success btn-sm" onclick="activateGame(' + g.id + ',' + sid + ')">▶</button>'
-          + '<button class="btn btn-danger btn-sm" onclick="stopGame(' + g.id + ',' + sid + ')">⏹</button>';
+      if (r.status === 'running') {
+        controls = '<button class="btn btn-warning btn-sm" onclick="pauseRound(' + r.id + ',' + gid + ',' + sid + ')">⏸</button>'
+          + '<button class="btn btn-danger btn-sm" onclick="stopRound(' + r.id + ',' + gid + ',' + sid + ')">⏹</button>';
+      } else if (r.status === 'paused') {
+        controls = '<button class="btn btn-success btn-sm" onclick="resumeRound(' + r.id + ',' + gid + ',' + sid + ')">▶</button>'
+          + '<button class="btn btn-danger btn-sm" onclick="stopRound(' + r.id + ',' + gid + ',' + sid + ')">⏹</button>';
       } else {
-        controls = '<button class="btn btn-sm" style="background:#e2e8f0;color:#334155" onclick="openGame(' + g.id + ',' + sid + ')">🔓</button>'
-          + '<button class="btn btn-sm" style="background:#dbeafe;color:#2563eb" onclick="randomizeOrder(' + g.id + ',' + sid + ')">🎲</button>'
-          + '<button class="btn btn-success btn-sm" onclick="activateGame(' + g.id + ',' + sid + ')">▶</button>';
+        controls = '<button class="btn btn-success btn-sm" onclick="startRound(' + r.id + ',' + gid + ',' + sid + ')">▶</button>';
       }
+      controls += '<button class="btn btn-danger btn-sm" onclick="deleteRound(' + r.id + ',' + gid + ',' + sid + ')">✕</button>';
 
-      return '<div id="grow_' + g.id + '" class="flex justify-between items-center" style="padding:4px 0">'
-        + '<span class="text-sm">' + esc(g.name) + timerHtml + ' ' + badge + '</span>'
-        + '<div class="flex gap-2">'
-        + '<button class="btn btn-sm" style="background:#e2e8f0;color:#334155" onclick="editGame(' + g.id + ',' + sid + ')">✏️</button>'
-        + controls
-        + '<button class="btn btn-danger btn-sm" onclick="deleteGame(' + g.id + ',' + sid + ')">✕</button>'
-        + '</div></div>';;
+      return '<div class="flex justify-between items-center" style="padding:4px 0;gap:8px">'
+        + '<span style="flex:1;min-width:0">' + esc(r.name) + timerHtml + ' ' + badge + '</span>'
+        + '<div class="flex" style="gap:6px;flex-shrink:0">' + controls + '</div>'
+        + '</div>';
     }
 
-    // Lightweight refresh: only update game rows in-place without touching inputs
+    async function addRound(gid, sid) {
+      await api('/api/rounds', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ game_id: gid }) });
+      loadRounds(gid, sid);
+    }
+
+    async function startRound(rid, gid, sid) {
+      await api('/api/rounds/' + rid + '/activate', { method:'PUT' });
+      loadGames(sid);
+    }
+
+    async function pauseRound(rid, gid, sid) {
+      await api('/api/rounds/' + rid + '/pause', { method:'PUT' });
+      loadRounds(gid, sid);
+    }
+
+    async function resumeRound(rid, gid, sid) {
+      await api('/api/rounds/' + rid + '/resume', { method:'PUT' });
+      loadRounds(gid, sid);
+    }
+
+    async function stopRound(rid, gid, sid) {
+      await api('/api/rounds/' + rid + '/stop', { method:'PUT' });
+      loadGames(sid);
+    }
+
+    async function deleteRound(rid, gid, sid) {
+      if (!confirm('Delete this round and its scores?')) return;
+      await api('/api/rounds/' + rid, { method:'DELETE' });
+      loadRounds(gid, sid);
+    }
+
+    // Lightweight refresh: update game headers & round timers in-place (no DOM rebuild)
     async function refreshGameTimers() {
       for (const sid of loadedSeriesIds) {
         const el = document.getElementById('games_' + sid);
         if (!el) continue;
         try {
           const games = await api('/api/series/' + sid + '/games');
-          games.forEach(g => {
-            const row = document.getElementById('grow_' + g.id);
-            if (row) {
-              row.outerHTML = buildGameRow(g, sid);
-            }
-          });
-          // If game count changed (new game added/deleted), do full reload
+          // If game count changed, do a full rebuild
           const currentRows = el.querySelectorAll('[id^="grow_"]');
           if (currentRows.length !== games.length) {
             loadGames(sid);
+            continue;
+          }
+          for (const g of games) {
+            // Skip games being edited
+            if (editingGameId === g.id) continue;
+            // Update game header in-place (badge + controls)
+            const header = document.getElementById('gheader_' + g.id);
+            if (header) {
+              header.innerHTML = buildGameHeaderHTML(g, sid);
+              // Sync collapse state: auto-expand active games, auto-collapse stopped
+              const body = document.getElementById('gbody_' + g.id);
+              if (body && gameExpandState[g.id] === undefined) {
+                body.style.display = g.is_active ? '' : 'none';
+                const chev = document.getElementById('gchev_' + g.id);
+                if (chev) chev.textContent = g.is_active ? '\u25be' : '\u25b8';
+              }
+            } else {
+              // Row missing — full rebuild
+              loadGames(sid);
+              break;
+            }
+            // Fetch rounds and update innerHTML directly (no async gap)
+            try {
+              const rounds = await api('/api/games/' + g.id + '/rounds');
+              const roundsEl = document.getElementById('rounds_' + g.id);
+              if (roundsEl) {
+                if (!rounds.length) {
+                  roundsEl.innerHTML = '<span class="text-muted" style="font-size:0.8rem">No rounds yet</span>';
+                } else {
+                  roundsEl.innerHTML = rounds.map(r => buildRoundRow(r, g.id, sid)).join('');
+                }
+              }
+            } catch(e2) {}
           }
         } catch(e) {}
       }
@@ -382,28 +501,13 @@
       loadGames(sid);
     }
 
-    async function activateGame(gid, sid) {
-      await api('/api/games/' + gid + '/activate', { method:'PUT' });
-      loadGames(sid);
-    }
-
     async function openGame(gid, sid) {
       await api('/api/games/' + gid + '/open', { method:'PUT' });
       loadGames(sid);
     }
 
-    async function pauseGame(gid, sid) {
-      await api('/api/games/' + gid + '/pause', { method:'PUT' });
-      loadGames(sid);
-    }
-
-    async function resumeGame(gid, sid) {
-      await api('/api/games/' + gid + '/resume', { method:'PUT' });
-      loadGames(sid);
-    }
-
     async function stopGame(gid, sid) {
-      if (!confirm('Stop this game? Scoring will be disabled.')) return;
+      if (!confirm('Close this game?')) return;
       await api('/api/games/' + gid + '/stop', { method:'PUT' });
       loadGames(sid);
     }

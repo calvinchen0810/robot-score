@@ -17,6 +17,12 @@ with engine.connect() as conn:
         conn.execute(text("ALTER TABLE games ADD COLUMN paused_remaining FLOAT"))
         conn.commit()
 
+    # Add round_id to team_scores if missing
+    ts_cols = [c["name"] for c in inspect(engine).get_columns("team_scores")]
+    if "round_id" not in ts_cols:
+        conn.execute(text("ALTER TABLE team_scores ADD COLUMN round_id INTEGER"))
+        conn.commit()
+
 app = FastAPI(title="Robot Score")
 
 app.include_router(api_router)

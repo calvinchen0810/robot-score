@@ -9,7 +9,7 @@ import secrets
 import random
 
 from database import get_db
-from models import Series, Game, Team, ScoreButton, TeamScore, Song, AdminSetting
+from models import Series, Game, Round, Team, ScoreButton, TeamScore, Song, AdminSetting
 from schemas import (
     SeriesCreate, SeriesOut,
     GameCreate, GameUpdate, GameOut,
@@ -17,6 +17,7 @@ from schemas import (
     ScoreButtonCreate, ScoreButtonUpdate, ScoreButtonOut,
     ScoreAction, TeamScoreOut, TeamScoreManual,
     SongCreate, SongOut,
+    RoundCreate, RoundUpdate, RoundOut,
 )
 
 router = APIRouter(prefix="/api")
@@ -170,30 +171,31 @@ def update_dashboard_control(data: dict, _auth=Depends(_require_admin)):
     return _dashboard_control
 
 
-def _remaining(game):
-    """Compute seconds remaining for a game timer. Returns None if no timer."""
-    if game.duration_seconds is None:
+def _remaining(obj):
+    """Compute seconds remaining for a game/round timer. Returns None if no timer."""
+    if obj.duration_seconds is None:
         return None
-    base = game.paused_remaining if game.paused_remaining is not None else game.duration_seconds
-    if game.status == "running" and game.started_at:
-        elapsed = (datetime.now(timezone.utc) - game.started_at.replace(tzinfo=timezone.utc)).total_seconds()
+    base = obj.paused_remaining if obj.paused_remaining is not None else obj.duration_seconds
+    if obj.status == "running" and obj.started_at:
+        elapsed = (datetime.now(timezone.utc) - obj.started_at.replace(tzinfo=timezone.utc)).total_seconds()
         return max(0, base - elapsed)
-    if game.status == "paused":
+    if obj.status == "paused":
         return max(0, base)
-    return game.duration_seconds
+    return obj.duration_seconds
 
 
-def _check_auto_stop(game, db):
-    """Auto-stop game if timer expired. Returns True if stopped."""
-    if game.status != "running" or game.duration_seconds is None or not game.started_at:
+def _check_auto_stop(obj, db):
+    """Auto-stop game/round if timer expired. Returns True if stopped."""
+    if obj.status != "running" or obj.duration_seconds is None or not obj.started_at:
         return False
-    base = game.paused_remaining if game.paused_remaining is not None else game.duration_seconds
-    elapsed = (datetime.now(timezone.utc) - game.started_at.replace(tzinfo=timezone.utc)).total_seconds()
+    base = obj.paused_remaining if obj.paused_remaining is not None else obj.duration_seconds
+    elapsed = (datetime.now(timezone.utc) - obj.started_at.replace(tzinfo=timezone.utc)).total_seconds()
     if elapsed >= base:
-        game.status = "stopped"
-        game.is_active = False
-        game.started_at = None
-        game.paused_remaining = None
+        obj.status = "stopped"
+        if hasattr(obj, 'is_active'):
+            obj.is_active = False
+        obj.started_at = None
+        obj.paused_remaining = None
         db.commit()
         return True
     return False
@@ -376,6 +378,148 @@ def delete_game(gid: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+# ── Rounds ──────────────────────────────────────────────
+def _round_out(r):
+    return {
+        "id": r.id,
+        "name": r.name,
+        "game_id": r.game_id,
+        "round_number": r.round_number,
+        "status": r.status,
+        "duration_seconds": r.duration_seconds,
+        "remaining_seconds": _remaining(r),
+    }
+
+
+@router.get("/games/{gid}/rounds")
+def list_rounds(gid: int, db: Session = Depends(get_db)):
+    rounds = db.query(Round).filter(Round.game_id == gid).order_by(Round.round_number).all()
+    for r in rounds:
+        _check_auto_stop(r, db)
+    return [_round_out(r) for r in rounds]
+
+
+@router.post("/rounds")
+def create_round(data: RoundCreate, db: Session = Depends(get_db), _auth=Depends(_require_admin)):
+    game = db.query(Game).get(data.game_id)
+    if not game:
+        raise HTTPException(404, "Game not found")
+    max_num = db.query(Round).filter(Round.game_id == data.game_id).count()
+    rnd_num = max_num + 1
+    name = data.name or f"Round {rnd_num}"
+    dur = data.duration_seconds
+    if dur is None and game.duration_seconds:
+        dur = game.duration_seconds
+    r = Round(name=name, game_id=data.game_id, round_number=rnd_num,
+              duration_seconds=dur if dur and dur > 0 else None)
+    db.add(r)
+    db.commit()
+    db.refresh(r)
+    return _round_out(r)
+
+
+@router.put("/rounds/{rid}")
+def update_round(rid: int, data: RoundUpdate, db: Session = Depends(get_db), _auth=Depends(_require_admin)):
+    r = db.query(Round).get(rid)
+    if not r:
+        raise HTTPException(404, "Round not found")
+    if data.name is not None:
+        r.name = data.name
+    if data.duration_seconds is not None:
+        r.duration_seconds = data.duration_seconds if data.duration_seconds > 0 else None
+    db.commit()
+    return _round_out(r)
+
+
+@router.put("/rounds/{rid}/activate")
+def activate_round(rid: int, db: Session = Depends(get_db), _auth=Depends(_require_admin)):
+    r = db.query(Round).get(rid)
+    if not r:
+        raise HTTPException(404, "Round not found")
+    game = db.query(Game).get(r.game_id)
+    # Stop any other running rounds in this game
+    db.query(Round).filter(Round.game_id == r.game_id, Round.id != rid).update(
+        {Round.status: "stopped", Round.started_at: None, Round.paused_remaining: None})
+    # Ensure game is active/open
+    if not game.is_active:
+        db.query(Game).filter(Game.series_id == game.series_id).update(
+            {Game.is_active: False, Game.status: "stopped"})
+        game.is_active = True
+    game.status = "running"
+    r.status = "running"
+    r.paused_remaining = None
+    r.started_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"ok": True}
+
+
+@router.put("/rounds/{rid}/pause")
+def pause_round(rid: int, db: Session = Depends(get_db), _auth=Depends(_require_admin)):
+    r = db.query(Round).get(rid)
+    if not r:
+        raise HTTPException(404, "Round not found")
+    if r.status != "running":
+        raise HTTPException(400, "Round is not running")
+    if r.duration_seconds is not None and r.started_at:
+        base = r.paused_remaining if r.paused_remaining is not None else r.duration_seconds
+        elapsed = (datetime.now(timezone.utc) - r.started_at.replace(tzinfo=timezone.utc)).total_seconds()
+        r.paused_remaining = max(0, base - elapsed)
+    r.status = "paused"
+    r.started_at = None
+    # Sync game status
+    game = db.query(Game).get(r.game_id)
+    if game:
+        game.status = "paused"
+    db.commit()
+    return {"ok": True}
+
+
+@router.put("/rounds/{rid}/resume")
+def resume_round(rid: int, db: Session = Depends(get_db), _auth=Depends(_require_admin)):
+    r = db.query(Round).get(rid)
+    if not r:
+        raise HTTPException(404, "Round not found")
+    if r.status != "paused":
+        raise HTTPException(400, "Round is not paused")
+    r.status = "running"
+    r.started_at = datetime.now(timezone.utc)
+    game = db.query(Game).get(r.game_id)
+    if game:
+        game.status = "running"
+    db.commit()
+    return {"ok": True}
+
+
+@router.put("/rounds/{rid}/stop")
+def stop_round(rid: int, db: Session = Depends(get_db), _auth=Depends(_require_admin)):
+    r = db.query(Round).get(rid)
+    if not r:
+        raise HTTPException(404, "Round not found")
+    r.status = "stopped"
+    r.started_at = None
+    r.paused_remaining = None
+    # If no other rounds are running in this game, set game status to stopped
+    game = db.query(Game).get(r.game_id)
+    if game:
+        running = db.query(Round).filter(Round.game_id == game.id, Round.status.in_(["running", "paused"])).first()
+        if not running:
+            game.status = "stopped"
+    db.commit()
+    return {"ok": True}
+
+
+@router.delete("/rounds/{rid}")
+def delete_round(rid: int, db: Session = Depends(get_db), _auth=Depends(_require_admin)):
+    r = db.query(Round).get(rid)
+    if not r:
+        raise HTTPException(404, "Round not found")
+    # Delete scores for this round
+    db.query(TeamScore).filter(TeamScore.round_id == rid).delete()
+    db.delete(r)
+    db.commit()
+    return {"ok": True}
+
+
 # ── Teams ───────────────────────────────────────────────
 @router.get("/games/{gid}/teams", response_model=List[TeamOut])
 def list_teams(gid: int, db: Session = Depends(get_db)):
@@ -488,44 +632,58 @@ def delete_button(bid: int, db: Session = Depends(get_db)):
 # ── Scoring ─────────────────────────────────────────────
 @router.post("/score")
 def update_score(data: ScoreAction, db: Session = Depends(get_db)):
-    """Increment or decrement a team's click count for a button."""
-    # Check that the game is running
+    """Increment or decrement a team's click count for a button (in the active round)."""
     team = db.query(Team).get(data.team_id)
     if not team:
         raise HTTPException(404, "Team not found")
     game = db.query(Game).get(team.game_id)
     if not game or game.status != "running":
         raise HTTPException(400, "Game is not running – scoring is disabled")
+
+    # Find active round
+    active_round = db.query(Round).filter(
+        Round.game_id == game.id, Round.status == "running"
+    ).first()
+    if not active_round:
+        raise HTTPException(400, "No active round – scoring is disabled")
     # Auto-stop if timer expired
-    if _check_auto_stop(game, db):
-        raise HTTPException(400, "Time is up – game has been stopped")
+    if _check_auto_stop(active_round, db):
+        # Also update game status
+        running = db.query(Round).filter(Round.game_id == game.id, Round.status.in_(["running", "paused"])).first()
+        if not running:
+            game.status = "stopped"
+            db.commit()
+        raise HTTPException(400, "Time is up – round has been stopped")
 
     btn = db.query(ScoreButton).get(data.button_id)
     if not btn:
         raise HTTPException(404, "Button not found")
 
+    # Score is per-team per-button per-round
     ts = (
         db.query(TeamScore)
-        .filter(TeamScore.team_id == data.team_id, TeamScore.button_id == data.button_id)
+        .filter(TeamScore.team_id == data.team_id, TeamScore.button_id == data.button_id,
+                TeamScore.round_id == active_round.id)
         .first()
     )
     if not ts:
-        ts = TeamScore(team_id=data.team_id, button_id=data.button_id, clicks=0)
+        ts = TeamScore(team_id=data.team_id, button_id=data.button_id, round_id=active_round.id, clicks=0)
         db.add(ts)
         db.flush()
 
     new_clicks = ts.clicks + data.delta
     if new_clicks < 0:
         new_clicks = 0
-    # Check per-team limit
+    # Check per-team limit (per round)
     if btn.max_clicks is not None and new_clicks > btn.max_clicks:
         raise HTTPException(400, f"Max clicks per team ({btn.max_clicks}) reached")
-    # Check game-wide total limit (only teams in the same game)
+    # Check game-wide total limit for this round
     if btn.max_clicks_game is not None:
         game_team_ids = [t.id for t in db.query(Team).filter(Team.game_id == game.id).all()]
         total_clicks = (
             db.query(TeamScore)
-            .filter(TeamScore.button_id == btn.id, TeamScore.team_id.in_(game_team_ids))
+            .filter(TeamScore.button_id == btn.id, TeamScore.team_id.in_(game_team_ids),
+                    TeamScore.round_id == active_round.id)
             .with_entities(TeamScore.clicks)
             .all()
         )
@@ -536,12 +694,13 @@ def update_score(data: ScoreAction, db: Session = Depends(get_db)):
     ts.clicks = new_clicks
     db.commit()
 
-    # Compute game total for this button
+    # Compute round total for this button
     game_team_ids = [t.id for t in db.query(Team).filter(Team.game_id == game.id).all()]
     game_total = sum(
         r.clicks for r in
         db.query(TeamScore)
-        .filter(TeamScore.button_id == btn.id, TeamScore.team_id.in_(game_team_ids))
+        .filter(TeamScore.button_id == btn.id, TeamScore.team_id.in_(game_team_ids),
+                TeamScore.round_id == active_round.id)
         .with_entities(TeamScore.clicks)
         .all()
     )
@@ -550,27 +709,45 @@ def update_score(data: ScoreAction, db: Session = Depends(get_db)):
 
 @router.get("/teams/{tid}/scores")
 def get_team_scores(tid: int, db: Session = Depends(get_db)):
+    """Return current-round scores for a team (used by client scoring page)."""
     team = db.query(Team).get(tid)
-    rows = db.query(TeamScore).filter(TeamScore.team_id == tid).all()
     result = {}
+    if not team:
+        return result
 
-    # Compute game totals for all buttons
-    game_totals = {}
-    if team:
-        game_team_ids = [t.id for t in db.query(Team).filter(Team.game_id == team.game_id).all()]
-        all_scores = (
-            db.query(TeamScore)
-            .filter(TeamScore.team_id.in_(game_team_ids))
-            .all()
-        )
-        for s in all_scores:
-            game_totals[s.button_id] = game_totals.get(s.button_id, 0) + s.clicks
+    game = db.query(Game).get(team.game_id)
+    # Find active round
+    active_round = db.query(Round).filter(
+        Round.game_id == team.game_id, Round.status.in_(["running", "paused"])
+    ).first()
+    # Fallback: latest round
+    if not active_round:
+        active_round = db.query(Round).filter(
+            Round.game_id == team.game_id
+        ).order_by(Round.round_number.desc()).first()
 
+    round_id = active_round.id if active_round else None
+
+    # Get this team's scores for the active round
+    rows = db.query(TeamScore).filter(
+        TeamScore.team_id == tid,
+        TeamScore.round_id == round_id
+    ).all() if round_id else []
     team_scores = {r.button_id: r for r in rows}
 
-    # Return data for ALL active buttons, not just ones the team has scored on
-    if team:
-        series_id = db.query(Game).get(team.game_id).series_id
+    # Compute round-scoped game totals
+    game_totals = {}
+    if round_id:
+        game_team_ids = [t.id for t in db.query(Team).filter(Team.game_id == team.game_id).all()]
+        round_scores = db.query(TeamScore).filter(
+            TeamScore.team_id.in_(game_team_ids),
+            TeamScore.round_id == round_id
+        ).all()
+        for s in round_scores:
+            game_totals[s.button_id] = game_totals.get(s.button_id, 0) + s.clicks
+
+    series_id = game.series_id if game else None
+    if series_id:
         all_buttons = (
             db.query(ScoreButton)
             .filter(ScoreButton.series_id == series_id, ScoreButton.is_active == True)
@@ -583,23 +760,16 @@ def get_team_scores(tid: int, db: Session = Depends(get_db)):
                 "points": (ts.clicks if ts else 0) * b.points,
                 "game_total": game_totals.get(b.id, 0),
             }
-    else:
-        for r in rows:
-            result[r.button_id] = {
-                "clicks": r.clicks,
-                "points": r.clicks * r.button.points,
-                "game_total": game_totals.get(r.button_id, r.clicks),
-            }
     return result
 
 
 # ── Dashboard data ──────────────────────────────────────
 @router.get("/dashboard")
 def dashboard_data(db: Session = Depends(get_db)):
-    """Return active series, its active game ranking, and all-teams ranking."""
+    """Return active series, its active game ranking (summed across rounds), and all-teams ranking."""
     series = db.query(Series).filter(Series.is_active == True).first()
     if not series:
-        return {"series": None, "active_game": None, "game_ranking": [], "all_ranking": []}
+        return {"series": None, "active_game": None, "active_round": None, "game_ranking": [], "all_ranking": []}
 
     buttons = (
         db.query(ScoreButton)
@@ -609,20 +779,44 @@ def dashboard_data(db: Session = Depends(get_db)):
     btn_map = {b.id: b for b in buttons}
 
     active_game = db.query(Game).filter(Game.series_id == series.id, Game.is_active == True).first()
-    if active_game:
-        _check_auto_stop(active_game, db)
 
-    def calc_ranking(teams):
+    # Find active round
+    active_round = None
+    if active_game:
+        active_round = db.query(Round).filter(
+            Round.game_id == active_game.id, Round.status.in_(["running", "paused"])
+        ).first()
+        if active_round:
+            _check_auto_stop(active_round, db)
+            # Sync game status
+            if active_round.status == "stopped":
+                running = db.query(Round).filter(Round.game_id == active_game.id, Round.status.in_(["running", "paused"])).first()
+                if not running:
+                    active_game.status = "stopped"
+                    db.commit()
+                active_round = None
+
+    def calc_ranking(teams, game_scope_id=None):
+        """Calculate ranking. If game_scope_id is set, sum scores across all rounds of that game."""
         ranking = []
         for t in teams:
             total = 0
             scored = {}
+            # Sum scores across all rounds (or all scores if no game scope)
             for sc in t.scores:
                 if sc.button_id in btn_map:
+                    # If game-scoped, only count scores from rounds belonging to the game
+                    if game_scope_id and sc.round_id:
+                        rnd = db.query(Round).get(sc.round_id)
+                        if rnd and rnd.game_id != game_scope_id:
+                            continue
                     pts = sc.clicks * btn_map[sc.button_id].points
                     total += pts
-                    scored[sc.button_id] = {"clicks": sc.clicks, "points": pts}
-            # Include all buttons, even those with 0 clicks
+                    if sc.button_id in scored:
+                        scored[sc.button_id]["clicks"] += sc.clicks
+                        scored[sc.button_id]["points"] += pts
+                    else:
+                        scored[sc.button_id] = {"clicks": sc.clicks, "points": pts}
             details = []
             for b in buttons:
                 sc_data = scored.get(b.id, {"clicks": 0, "points": 0})
@@ -632,8 +826,6 @@ def dashboard_data(db: Session = Depends(get_db)):
                     "clicks": sc_data["clicks"],
                     "points": sc_data["points"],
                 })
-            # Tiebreaker: for same total points, compare clicks on buttons by display_order (higher order = higher priority)
-            # Build a tuple of clicks ordered by display_order descending for lexicographic comparison
             tiebreaker = tuple(
                 scored.get(b.id, {"clicks": 0})["clicks"]
                 for b in sorted(buttons, key=lambda b: b.display_order, reverse=True)
@@ -656,7 +848,7 @@ def dashboard_data(db: Session = Depends(get_db)):
     game_ranking = []
     if active_game:
         teams = db.query(Team).filter(Team.game_id == active_game.id).all()
-        game_ranking = calc_ranking(teams)
+        game_ranking = calc_ranking(teams, game_scope_id=active_game.id)
 
     all_teams = db.query(Team).join(Game).filter(Game.series_id == series.id).all()
     all_ranking = calc_ranking(all_teams)
@@ -665,17 +857,23 @@ def dashboard_data(db: Session = Depends(get_db)):
 
     songs = db.query(Song).filter(Song.series_id == series.id).order_by(Song.display_order, Song.id).all()
 
-    # Consume draw event once: return it to the first dashboard poller after the admin triggered it,
-    # then clear it so the animation doesn't repeatedly show for later visitors.
     draw_to_send = None
     global _last_draw
     if active_game and isinstance(_last_draw, dict) and _last_draw.get("game_id") == active_game.id:
         draw_to_send = _last_draw
         _last_draw = {}
 
+    # Build round info for active game
+    rounds_info = []
+    if active_game:
+        rounds = db.query(Round).filter(Round.game_id == active_game.id).order_by(Round.round_number).all()
+        rounds_info = [{"id": r.id, "name": r.name, "round_number": r.round_number, "status": r.status} for r in rounds]
+
     return {
         "series": {"id": series.id, "name": series.name},
-        "active_game": {"id": active_game.id, "name": active_game.name, "status": active_game.status, "remaining_seconds": _remaining(active_game)} if active_game else None,
+        "active_game": {"id": active_game.id, "name": active_game.name, "status": active_game.status} if active_game else None,
+        "active_round": {"id": active_round.id, "name": active_round.name, "status": active_round.status, "remaining_seconds": _remaining(active_round)} if active_round else None,
+        "rounds": rounds_info,
         "game_ranking": game_ranking,
         "all_ranking": all_ranking,
         "games": [{"id": g.id, "name": g.name, "is_active": g.is_active, "status": g.status} for g in games],
@@ -695,8 +893,22 @@ def get_active(db: Session = Depends(get_db)):
     if not series:
         return {"series": None}
     game = db.query(Game).filter(Game.series_id == series.id, Game.is_active == True).first()
+
+    # Find active round
+    active_round = None
     if game:
-        _check_auto_stop(game, db)
+        active_round = db.query(Round).filter(
+            Round.game_id == game.id, Round.status.in_(["running", "paused"])
+        ).first()
+        if active_round:
+            _check_auto_stop(active_round, db)
+            if active_round.status == "stopped":
+                running = db.query(Round).filter(Round.game_id == game.id, Round.status.in_(["running", "paused"])).first()
+                if not running:
+                    game.status = "stopped"
+                    db.commit()
+                active_round = None
+
     buttons = (
         db.query(ScoreButton)
         .filter(ScoreButton.series_id == series.id, ScoreButton.is_active == True)
@@ -705,7 +917,8 @@ def get_active(db: Session = Depends(get_db)):
     )
     return {
         "series": {"id": series.id, "name": series.name},
-        "game": {"id": game.id, "name": game.name, "status": game.status, "remaining_seconds": _remaining(game)} if game else None,
+        "game": {"id": game.id, "name": game.name, "status": game.status} if game else None,
+        "active_round": {"id": active_round.id, "name": active_round.name, "status": active_round.status, "remaining_seconds": _remaining(active_round)} if active_round else None,
         "buttons": [
             {
                 "id": b.id, "label": b.label, "image_url": b.image_url,
@@ -714,7 +927,6 @@ def get_active(db: Session = Depends(get_db)):
             }
             for b in buttons
         ],
-        # Whether clients are allowed to create new teams via the client UI
         "allow_create_team": (db.query(AdminSetting).filter(AdminSetting.key == 'allow_create_team').first().value == 'true'
                               if db.query(AdminSetting).filter(AdminSetting.key == 'allow_create_team').first() else True),
     }
@@ -723,13 +935,25 @@ def get_active(db: Session = Depends(get_db)):
 # ── Admin: manage team scores manually ──────────────────
 @router.put("/admin/score")
 def admin_set_score(data: TeamScoreManual, db: Session = Depends(get_db)):
+    team = db.query(Team).get(data.team_id)
+    round_id = None
+    if team:
+        # Find active or latest round
+        rnd = db.query(Round).filter(
+            Round.game_id == team.game_id, Round.status.in_(["running", "paused"])
+        ).first()
+        if not rnd:
+            rnd = db.query(Round).filter(Round.game_id == team.game_id).order_by(Round.round_number.desc()).first()
+        if rnd:
+            round_id = rnd.id
     ts = (
         db.query(TeamScore)
-        .filter(TeamScore.team_id == data.team_id, TeamScore.button_id == data.button_id)
+        .filter(TeamScore.team_id == data.team_id, TeamScore.button_id == data.button_id,
+                TeamScore.round_id == round_id)
         .first()
     )
     if not ts:
-        ts = TeamScore(team_id=data.team_id, button_id=data.button_id, clicks=0)
+        ts = TeamScore(team_id=data.team_id, button_id=data.button_id, round_id=round_id, clicks=0)
         db.add(ts)
     ts.clicks = max(0, data.clicks)
     db.commit()
@@ -799,6 +1023,7 @@ def export_database(db: Session = Depends(get_db), _auth=Depends(_require_admin)
     data = {
         "series": [],
         "games": [],
+        "rounds": [],
         "teams": [],
         "score_buttons": [],
         "team_scores": [],
@@ -818,6 +1043,15 @@ def export_database(db: Session = Depends(get_db), _auth=Depends(_require_admin)
             "started_at": g.started_at.isoformat() if g.started_at else None,
             "created_at": g.created_at.isoformat() if g.created_at else None,
         })
+    for r in db.query(Round).all():
+        data["rounds"].append({
+            "id": r.id, "name": r.name, "game_id": r.game_id,
+            "round_number": r.round_number, "status": r.status,
+            "duration_seconds": r.duration_seconds,
+            "paused_remaining": r.paused_remaining,
+            "started_at": r.started_at.isoformat() if r.started_at else None,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        })
     for t in db.query(Team).all():
         data["teams"].append({
             "id": t.id, "name": t.name, "game_id": t.game_id,
@@ -835,7 +1069,8 @@ def export_database(db: Session = Depends(get_db), _auth=Depends(_require_admin)
     for ts in db.query(TeamScore).all():
         data["team_scores"].append({
             "id": ts.id, "team_id": ts.team_id,
-            "button_id": ts.button_id, "clicks": ts.clicks,
+            "button_id": ts.button_id, "round_id": ts.round_id,
+            "clicks": ts.clicks,
         })
     for sg in db.query(Song).all():
         data["songs"].append({
@@ -863,6 +1098,7 @@ async def import_database(file: UploadFile = File(...), db: Session = Depends(ge
 
     # Clear existing data in correct order (foreign key deps)
     db.query(TeamScore).delete()
+    db.query(Round).delete()
     db.query(Team).delete()
     db.query(Game).delete()
     db.query(ScoreButton).delete()
@@ -870,7 +1106,6 @@ async def import_database(file: UploadFile = File(...), db: Session = Depends(ge
     db.query(Series).delete()
     db.flush()
 
-    # Re-insert in dependency order
     for s in data["series"]:
         db.add(Series(
             id=s["id"], name=s["name"], is_active=s.get("is_active", True),
@@ -885,6 +1120,16 @@ async def import_database(file: UploadFile = File(...), db: Session = Depends(ge
             paused_remaining=g.get("paused_remaining"),
             started_at=datetime.fromisoformat(g["started_at"]) if g.get("started_at") else None,
             created_at=datetime.fromisoformat(g["created_at"]) if g.get("created_at") else datetime.utcnow(),
+        ))
+    db.flush()
+    for r in data.get("rounds", []):
+        db.add(Round(
+            id=r["id"], name=r["name"], game_id=r["game_id"],
+            round_number=r.get("round_number", 1), status=r.get("status", "stopped"),
+            duration_seconds=r.get("duration_seconds"),
+            paused_remaining=r.get("paused_remaining"),
+            started_at=datetime.fromisoformat(r["started_at"]) if r.get("started_at") else None,
+            created_at=datetime.fromisoformat(r["created_at"]) if r.get("created_at") else datetime.utcnow(),
         ))
     db.flush()
     for b in data["score_buttons"]:
@@ -906,7 +1151,8 @@ async def import_database(file: UploadFile = File(...), db: Session = Depends(ge
     for ts in data["team_scores"]:
         db.add(TeamScore(
             id=ts["id"], team_id=ts["team_id"],
-            button_id=ts["button_id"], clicks=ts.get("clicks", 0),
+            button_id=ts["button_id"], round_id=ts.get("round_id"),
+            clicks=ts.get("clicks", 0),
         ))
     for sg in data["songs"]:
         db.add(Song(
