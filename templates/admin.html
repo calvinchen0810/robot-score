@@ -64,18 +64,25 @@
 
     <!-- ═══ TAB: Series & Games ═══════════════════════ -->
     <div id="tabSeries" class="tab-panel active">
-      <div class="card">
-        <h3>Create Series</h3>
-        <input type="text" id="newSeriesName" placeholder="Series name…">
-        <button class="btn btn-primary btn-block btn-sm mt-2" onclick="createSeries()">Create Series</button>
+      <div class="card" style="padding:10px 14px;margin-bottom:6px">
+        <h3 style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px;font-size:0.95rem;margin:0 0 4px" onclick="var b=document.getElementById('createSeriesBody');b.style.display=b.style.display==='none'?'':'none';this.querySelector('.chevron').textContent=b.style.display==='none'?'▸':'▾'">Create Series <span class="chevron" style="font-size:0.8rem;color:#94a3b8">▸</span></h3>
+        <div id="createSeriesBody" style="display:none">
+          <input type="text" id="newSeriesName" placeholder="Series name…" style="padding:5px 8px;font-size:0.9rem">
+          <button class="btn btn-primary btn-block btn-sm mt-2" onclick="createSeries()" style="padding:5px 12px;font-size:0.85rem">Create Series</button>
+        </div>
       </div>
-      <div class="card" style="margin-top:10px">
-        <h3>⏱ Planning Timer</h3>
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <input type="number" id="rcPlanMin" value="10" min="0" max="99" style="width:52px;font-size:1rem;text-align:center;padding:5px;border:2px solid #e2e8f0;border-radius:8px"><span style="font-size:0.9rem;color:#64748b">min</span>
-          <input type="number" id="rcPlanSec" value="0" min="0" max="59" style="width:52px;font-size:1rem;text-align:center;padding:5px;border:2px solid #e2e8f0;border-radius:8px"><span style="font-size:0.9rem;color:#64748b">sec</span>
-          <button class="btn btn-primary btn-sm" onclick="rcPlanTimer('start')" style="padding:6px 14px">▶ Start</button>
-          <button class="btn btn-sm" onclick="rcPlanTimer('reset')" style="padding:6px 14px;background:#e2e8f0;color:#334155;border:none;border-radius:8px;font-weight:600">⟲ Reset</button>
+      <div class="card" style="padding:10px 14px;margin-bottom:6px">
+        <h3 style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px;font-size:0.95rem;margin:0 0 4px" onclick="document.getElementById('rcPlanBody').style.display=document.getElementById('rcPlanBody').style.display==='none'?'':'none'; this.querySelector('.chevron').textContent=document.getElementById('rcPlanBody').style.display==='none'?'▸':'▾'">⏱ Planning Timer <span class="chevron" style="font-size:0.8rem;color:#94a3b8">▸</span></h3>
+        <div id="rcPlanBody" style="display:none;align-items:center;gap:6px;flex-wrap:wrap">
+          <div id="rcPlanCountdown" style="display:none;text-align:center;font-size:2rem;font-weight:800;color:#3b82f6;margin:4px 0"></div>
+          <div id="rcPlanEdit" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">
+          <input type="number" id="rcPlanMin" value="10" min="0" max="99" style="width:44px;font-size:0.9rem;text-align:center;padding:4px;border:1px solid #e2e8f0;border-radius:6px"><span style="font-size:0.8rem;color:#64748b">m</span>
+          <input type="number" id="rcPlanSec" value="0" min="0" max="59" style="width:44px;font-size:0.9rem;text-align:center;padding:4px;border:1px solid #e2e8f0;border-radius:6px"><span style="font-size:0.8rem;color:#64748b">s</span>
+          <button class="btn btn-primary btn-sm" onclick="rcPlanTimer('start')" style="padding:4px 10px;font-size:0.85rem">▶ Start</button>
+          </div>
+          <div id="rcPlanResetWrap" style="display:none;text-align:center;margin-top:4px">
+            <button class="btn btn-sm" onclick="rcPlanTimer('reset')" style="padding:4px 10px;font-size:0.85rem;background:#e2e8f0;color:#334155;border:none;border-radius:8px;font-weight:600">⟲ Reset</button>
+          </div>
         </div>
       </div>
       <div id="seriesList"></div>
@@ -933,6 +940,20 @@
         repBtn.style.background = rcState.repeat_one ? '#dbeafe' : 'none';
         repBtn.style.borderRadius = '6px';
       }
+      // Sync planning timer countdown from server state on load/poll
+      if (rcState.plan_timer_cmd === 'start' && rcState.plan_timer_cmd_ts && !adminPlanEnd) {
+        var cmdTime = new Date(rcState.plan_timer_cmd_ts).getTime();
+        var totalSec = (rcState.plan_timer_min || 0) * 60 + (rcState.plan_timer_sec || 0);
+        var endTime = cmdTime + totalSec * 1000;
+        if (endTime > Date.now()) {
+          adminPlanEnd = endTime;
+          if (adminPlanInterval) clearInterval(adminPlanInterval);
+          adminPlanInterval = setInterval(tickAdminPlanTimer, 200);
+          tickAdminPlanTimer();
+        }
+      } else if (rcState.plan_timer_cmd === 'reset' && adminPlanEnd) {
+        resetAdminPlanTimer();
+      }
     }
 
     function setRcBtn(id, active) {
@@ -961,9 +982,51 @@
       } catch(e) {}
     }
 
+    let adminPlanEnd = null;
+    let adminPlanInterval = null;
+
+    function tickAdminPlanTimer() {
+      const el = document.getElementById('rcPlanCountdown');
+      if (!el || !adminPlanEnd) return;
+      const rem = Math.max(0, Math.ceil((adminPlanEnd - Date.now()) / 1000));
+      const m = Math.floor(rem / 60);
+      const s = rem % 60;
+      el.textContent = '\u23f1 ' + m + ':' + String(s).padStart(2, '0');
+      el.style.color = rem <= 180 ? '#dc2626' : rem <= 300 ? '#f59e0b' : '#3b82f6';
+      el.style.display = '';
+      document.getElementById('rcPlanEdit').style.display = 'none';
+      document.getElementById('rcPlanResetWrap').style.display = '';
+      if (rem <= 0) {
+        clearInterval(adminPlanInterval);
+        adminPlanInterval = null;
+        el.textContent = '\u23f1 Time!';
+        el.style.color = '#dc2626';
+      }
+    }
+
+    function resetAdminPlanTimer() {
+      if (adminPlanInterval) clearInterval(adminPlanInterval);
+      adminPlanInterval = null;
+      adminPlanEnd = null;
+      const el = document.getElementById('rcPlanCountdown');
+      if (el) { el.textContent = ''; el.style.display = 'none'; }
+      document.getElementById('rcPlanEdit').style.display = 'flex';
+      document.getElementById('rcPlanResetWrap').style.display = 'none';
+    }
+
     async function rcPlanTimer(cmd) {
       const mins = parseInt(document.getElementById('rcPlanMin').value) || 0;
       const secs = parseInt(document.getElementById('rcPlanSec').value) || 0;
+      if (cmd === 'start') {
+        const total = mins * 60 + secs;
+        if (total <= 0) return;
+        adminPlanEnd = Date.now() + total * 1000;
+        if (adminPlanInterval) clearInterval(adminPlanInterval);
+        adminPlanInterval = setInterval(tickAdminPlanTimer, 200);
+        tickAdminPlanTimer();
+      } else {
+        resetAdminPlanTimer();
+      }
       try {
         await fetch('/api/admin/dashboard_control', {
           method: 'PUT',
