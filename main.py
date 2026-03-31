@@ -3,25 +3,19 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 
-from sqlalchemy import inspect, text
-from database import engine, Base
 from routes import router as api_router
 
-# Create tables on startup
-Base.metadata.create_all(bind=engine)
 
-# Lightweight migration: add missing columns
-with engine.connect() as conn:
-    cols = [c["name"] for c in inspect(engine).get_columns("games")]
-    if "paused_remaining" not in cols:
-        conn.execute(text("ALTER TABLE games ADD COLUMN paused_remaining FLOAT"))
-        conn.commit()
+def _run_migrations():
+    from alembic.config import Config
+    from alembic import command
+    import os, logging
+    logging.getLogger("alembic").setLevel(logging.WARNING)
+    alembic_cfg = Config(os.path.join(os.path.dirname(os.path.abspath(__file__)), "alembic.ini"))
+    command.upgrade(alembic_cfg, "head")
 
-    # Add round_id to team_scores if missing
-    ts_cols = [c["name"] for c in inspect(engine).get_columns("team_scores")]
-    if "round_id" not in ts_cols:
-        conn.execute(text("ALTER TABLE team_scores ADD COLUMN round_id INTEGER"))
-        conn.commit()
+
+_run_migrations()
 
 app = FastAPI(title="Robot Score")
 
