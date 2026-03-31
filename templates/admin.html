@@ -18,7 +18,36 @@
   </div>
 
   <!-- ═══ ADMIN PANEL (hidden until login) ═══════════ -->
-  <div id="adminPanel" class="container" style="display:none">
+  <!-- Dashboard Remote: Top toolbar (fixed) -->
+  <div id="rcToggleBar" style="display:none;position:fixed;top:0;left:0;right:0;background:#f8fafc;border-bottom:2px solid #e2e8f0;padding:8px 16px;z-index:100">
+    <div style="max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-weight:700;font-size:0.75rem;color:#64748b;margin-right:4px">📺</span>
+      <button id="rcTimerBtn" onclick="rcToggle('timer_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">⏱ Timer</button>
+      <button id="rcGameBtn" onclick="rcToggle('game_rank_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">🏁 Game</button>
+      <button id="rcSeriesBtn" onclick="rcToggle('series_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">🏆 Series</button>
+      <button id="rcQrBtn" onclick="rcToggle('qr_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">🔗 QR</button>
+    </div>
+  </div>
+
+  <!-- Dashboard Remote: Bottom music bar (fixed) -->
+  <div id="rcMusicBar" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#f8fafc;border-top:2px solid #e2e8f0;padding:8px 16px;z-index:100">
+    <div style="max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:12px">
+      <button onclick="rcPrev()" style="background:none;border:none;font-size:1.2rem;cursor:pointer">⏮</button>
+      <button id="rcPlayBtn" onclick="rcPlayPause()" style="background:#3b82f6;color:#fff;border:none;width:36px;height:36px;border-radius:50%;font-size:1.1rem;cursor:pointer">▶</button>
+      <button onclick="rcNext()" style="background:none;border:none;font-size:1.2rem;cursor:pointer">⏭</button>
+      <div style="flex:1;min-width:0">
+        <div id="rcNowPlaying" style="font-weight:600;font-size:0.85rem;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">♫ Music Remote</div>
+        <div style="font-size:0.7rem;color:#94a3b8" id="rcSongIndex"></div>
+      </div>
+      <button onclick="rcToggleSongList()" style="background:#e2e8f0;border:none;padding:4px 10px;border-radius:6px;font-size:0.75rem;font-weight:600;cursor:pointer;color:#334155">♫ List</button>
+      <button id="rcRepeatBtn" onclick="rcToggle('repeat_one')" style="background:none;border:none;font-size:1.1rem;cursor:pointer;opacity:0.4" title="Repeat one">🔂</button>
+    </div>
+    <div id="rcSongListPanel" style="display:none;max-width:1100px;margin:6px auto 0;max-height:150px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;background:#fff">
+      <div id="rcSongList"></div>
+    </div>
+  </div>
+
+  <div id="adminPanel" class="container" style="display:none;padding-top:48px;padding-bottom:60px">
     <div class="flex justify-between items-center">
       <h1>⚙️ Admin Panel</h1>
       <button class="btn btn-sm" style="background:#e2e8f0;color:#334155" onclick="doLogout()">🚪 Logout</button>
@@ -39,6 +68,15 @@
         <h3>Create Series</h3>
         <input type="text" id="newSeriesName" placeholder="Series name…">
         <button class="btn btn-primary btn-block btn-sm mt-2" onclick="createSeries()">Create Series</button>
+      </div>
+      <div class="card" style="margin-top:10px">
+        <h3>⏱ Planning Timer</h3>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <input type="number" id="rcPlanMin" value="10" min="0" max="99" style="width:52px;font-size:1rem;text-align:center;padding:5px;border:2px solid #e2e8f0;border-radius:8px"><span style="font-size:0.9rem;color:#64748b">min</span>
+          <input type="number" id="rcPlanSec" value="0" min="0" max="59" style="width:52px;font-size:1rem;text-align:center;padding:5px;border:2px solid #e2e8f0;border-radius:8px"><span style="font-size:0.9rem;color:#64748b">sec</span>
+          <button class="btn btn-primary btn-sm" onclick="rcPlanTimer('start')" style="padding:6px 14px">▶ Start</button>
+          <button class="btn btn-sm" onclick="rcPlanTimer('reset')" style="padding:6px 14px;background:#e2e8f0;color:#334155;border:none;border-radius:8px;font-weight:600">⟲ Reset</button>
+        </div>
       </div>
       <div id="seriesList"></div>
     </div>
@@ -720,6 +758,8 @@
       adminToken = '';
       sessionStorage.removeItem('adminToken');
       document.getElementById('adminPanel').style.display = 'none';
+      document.getElementById('rcToggleBar').style.display = 'none';
+      document.getElementById('rcMusicBar').style.display = 'none';
       document.getElementById('loginScreen').style.display = '';
       document.getElementById('loginPassword').value = '';
     }
@@ -727,6 +767,8 @@
     function showAdmin() {
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('adminPanel').style.display = '';
+      document.getElementById('rcToggleBar').style.display = '';
+      document.getElementById('rcMusicBar').style.display = '';
       loadSeries();
       loadAdminSettings();
     }
@@ -866,6 +908,186 @@
         refreshGameTimers();
       }
     }, 2000);
+
+    /* ── Dashboard Remote Control ────────────────────── */
+    let rcState = {};
+
+    async function loadDashControl() {
+      try {
+        const res = await fetch('/api/admin/dashboard_control', { headers: authHeaders() });
+        if (!res.ok) return;
+        rcState = await res.json();
+        updateRcButtons();
+      } catch(e) {}
+    }
+
+    function updateRcButtons() {
+      setRcBtn('rcTimerBtn', rcState.timer_visible);
+      setRcBtn('rcGameBtn', rcState.game_rank_visible);
+      setRcBtn('rcSeriesBtn', rcState.series_visible);
+      setRcBtn('rcQrBtn', rcState.qr_visible);
+      // Repeat button
+      const repBtn = document.getElementById('rcRepeatBtn');
+      if (repBtn) {
+        repBtn.style.opacity = rcState.repeat_one ? '1' : '0.4';
+        repBtn.style.background = rcState.repeat_one ? '#dbeafe' : 'none';
+        repBtn.style.borderRadius = '6px';
+      }
+    }
+
+    function setRcBtn(id, active) {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      if (active) {
+        btn.style.background = '#2563eb';
+        btn.style.color = '#ffffff';
+        btn.style.fontWeight = '700';
+      } else {
+        btn.style.background = '#e2e8f0';
+        btn.style.color = '#334155';
+        btn.style.fontWeight = '600';
+      }
+    }
+
+    async function rcToggle(key) {
+      rcState[key] = !rcState[key];
+      updateRcButtons();
+      try {
+        await fetch('/api/admin/dashboard_control', {
+          method: 'PUT',
+          headers: Object.assign({'Content-Type':'application/json'}, authHeaders()),
+          body: JSON.stringify({ [key]: rcState[key] })
+        });
+      } catch(e) {}
+    }
+
+    async function rcPlanTimer(cmd) {
+      const mins = parseInt(document.getElementById('rcPlanMin').value) || 0;
+      const secs = parseInt(document.getElementById('rcPlanSec').value) || 0;
+      try {
+        await fetch('/api/admin/dashboard_control', {
+          method: 'PUT',
+          headers: Object.assign({'Content-Type':'application/json'}, authHeaders()),
+          body: JSON.stringify({ plan_timer_cmd: cmd, plan_timer_min: mins, plan_timer_sec: secs })
+        });
+      } catch(e) {}
+    }
+
+    let rcPlaying = false;
+
+    function rcPlayPause() {
+      rcPlaying = !rcPlaying;
+      const pb = document.getElementById('rcPlayBtn');
+      if (pb) pb.textContent = rcPlaying ? '\u23f8' : '\u25b6';
+      rcMusic(rcPlaying ? 'play' : 'pause');
+    }
+
+    function rcNext() {
+      if (rcSongList.length) {
+        rcCurrentIdx = (rcCurrentIdx + 1) % rcSongList.length;
+        rcUpdateDisplay();
+      }
+      rcMusic('next');
+      rcPlaying = true;
+      const pb = document.getElementById('rcPlayBtn');
+      if (pb) pb.textContent = '\u23f8';
+    }
+
+    function rcPrev() {
+      if (rcSongList.length) {
+        rcCurrentIdx = (rcCurrentIdx - 1 + rcSongList.length) % rcSongList.length;
+        rcUpdateDisplay();
+      }
+      rcMusic('prev');
+      rcPlaying = true;
+      const pb = document.getElementById('rcPlayBtn');
+      if (pb) pb.textContent = '\u23f8';
+    }
+
+    function rcUpdateDisplay() {
+      const np = document.getElementById('rcNowPlaying');
+      const si = document.getElementById('rcSongIndex');
+      if (np && rcSongList.length) {
+        np.textContent = '\u266b ' + rcSongList[rcCurrentIdx].title;
+        if (si) si.textContent = (rcCurrentIdx + 1) + ' / ' + rcSongList.length;
+      }
+      rcRenderSongList();
+    }
+
+    async function rcMusic(cmd) {
+      try {
+        await fetch('/api/admin/dashboard_control', {
+          method: 'PUT',
+          headers: Object.assign({'Content-Type':'application/json'}, authHeaders()),
+          body: JSON.stringify({ music_cmd: cmd })
+        });
+      } catch(e) {}
+    }
+
+    // Song list for admin music bar
+    let rcSongList = [];
+    let rcCurrentIdx = 0;
+
+    function rcToggleSongList() {
+      const el = document.getElementById('rcSongListPanel');
+      el.style.display = el.style.display === 'none' ? '' : 'none';
+    }
+
+    async function rcLoadSongs() {
+      try {
+        const d = await (await fetch('/api/dashboard')).json();
+        if (d.songs && d.songs.length) {
+          rcSongList = d.songs;
+          // Show first song by default if nothing playing
+          const np = document.getElementById('rcNowPlaying');
+          const si = document.getElementById('rcSongIndex');
+          if (np && rcSongList.length) {
+            np.textContent = '\u266b ' + rcSongList[rcCurrentIdx % rcSongList.length].title;
+            if (si) si.textContent = (rcCurrentIdx % rcSongList.length + 1) + ' / ' + rcSongList.length;
+          }
+          rcRenderSongList();
+        }
+      } catch(e) {}
+    }
+
+    function rcRenderSongList() {
+      const el = document.getElementById('rcSongList');
+      if (!el) return;
+      el.innerHTML = rcSongList.map((s, i) =>
+        '<div onclick="rcPlaySongAt(' + i + ')" style="padding:6px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;' + (i === rcCurrentIdx % rcSongList.length ? 'background:#eff6ff;font-weight:700' : '') + '">'
+        + '<span style="color:#3b82f6;margin-right:6px">' + (i === rcCurrentIdx % rcSongList.length ? '\u25b6' : '') + '</span>'
+        + esc(s.title)
+        + '</div>'
+      ).join('');
+    }
+
+    function rcPlaySongAt(idx) {
+      rcCurrentIdx = idx;
+      rcUpdateDisplay();
+      // Send play command with specific song index
+      rcMusicAt('play', idx);
+      rcPlaying = true;
+      const pb = document.getElementById('rcPlayBtn');
+      if (pb) pb.textContent = '\u23f8';
+    }
+
+    async function rcMusicAt(cmd, songIdx) {
+      try {
+        await fetch('/api/admin/dashboard_control', {
+          method: 'PUT',
+          headers: Object.assign({'Content-Type':'application/json'}, authHeaders()),
+          body: JSON.stringify({ music_cmd: cmd, music_song_idx: songIdx })
+        });
+      } catch(e) {}
+    }
+
+    // Poll songs periodically
+    rcLoadSongs();
+    setInterval(() => { if (adminToken) rcLoadSongs(); }, 5000);
+
+    // Load dashboard control state on admin init and poll every 3s
+    loadDashControl();
+    setInterval(() => { if (adminToken) loadDashControl(); }, 3000);
   </script>
 </body>
 </html>

@@ -28,6 +28,22 @@ _admin_tokens: set = set()
 # Last draw event (in-memory, for dashboard animation)
 _last_draw: dict = {}
 
+# Dashboard remote control (in-memory, admin → dashboard)
+_dashboard_control: dict = {
+    "timer_visible": True,
+    "game_rank_visible": False,
+    "series_visible": False,
+    "qr_visible": True,
+    "repeat_one": True,
+    "music_cmd": None,
+    "music_cmd_ts": None,
+    "music_song_idx": None,
+    "plan_timer_cmd": None,
+    "plan_timer_cmd_ts": None,
+    "plan_timer_min": 10,
+    "plan_timer_sec": 0,
+}
+
 
 def _hash_pw(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
@@ -122,6 +138,36 @@ def set_allow_create_team(data: dict, db: Session = Depends(get_db), _auth=Depen
         db.add(AdminSetting(key='allow_create_team', value=vstr))
     db.commit()
     return {"ok": True, "allow_create_team": (vstr == 'true')}
+
+
+# ── Dashboard remote control ───────────────────────────
+@router.get("/admin/dashboard_control")
+def get_dashboard_control(_auth=Depends(_require_admin)):
+    return _dashboard_control
+
+
+@router.put("/admin/dashboard_control")
+def update_dashboard_control(data: dict, _auth=Depends(_require_admin)):
+    global _dashboard_control
+    for key in ("timer_visible", "game_rank_visible", "series_visible", "qr_visible", "repeat_one"):
+        if key in data:
+            _dashboard_control[key] = bool(data[key])
+    if "plan_timer_cmd" in data and data["plan_timer_cmd"] in ("start", "reset"):
+        _dashboard_control["plan_timer_cmd"] = data["plan_timer_cmd"]
+        _dashboard_control["plan_timer_cmd_ts"] = datetime.now(timezone.utc).isoformat()
+        if "plan_timer_min" in data:
+            _dashboard_control["plan_timer_min"] = int(data["plan_timer_min"])
+        if "plan_timer_sec" in data:
+            _dashboard_control["plan_timer_sec"] = int(data["plan_timer_sec"])
+    if "music_cmd" in data and data["music_cmd"] in ("play", "pause", "next", "prev"):
+        _dashboard_control["music_cmd"] = data["music_cmd"]
+        _dashboard_control["music_cmd_ts"] = datetime.now(timezone.utc).isoformat()
+        # Optionally include which song index to play
+        if "music_song_idx" in data and isinstance(data["music_song_idx"], int):
+            _dashboard_control["music_song_idx"] = data["music_song_idx"]
+        else:
+            _dashboard_control["music_song_idx"] = None
+    return _dashboard_control
 
 
 def _remaining(game):
@@ -638,6 +684,7 @@ def dashboard_data(db: Session = Depends(get_db)):
         "draw_event": draw_to_send,
         "qr_image": (db.query(AdminSetting).filter(AdminSetting.key == 'qr_image').first().value
                      if db.query(AdminSetting).filter(AdminSetting.key == 'qr_image').first() else None),
+        "dashboard_control": _dashboard_control,
     }
 
 

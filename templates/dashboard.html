@@ -227,6 +227,8 @@
       </div>
       <audio id="audioEl" preload="auto"></audio>
     </div>
+    <!-- Banner shown when browser blocks remote audio playback -->
+    <div id="audioUnlockBanner" onclick="dismissAudioBanner()" style="display:none;position:fixed;top:0;left:0;right:0;background:#fbbf24;color:#1e293b;text-align:center;padding:12px;font-weight:700;font-size:1rem;cursor:pointer;z-index:200">🔊 Click here to enable remote audio playback</div>
   </div>
 
   <script>
@@ -469,6 +471,7 @@
           }
         } catch (e) { /* ignore */ }
         checkDrawEvent(d.draw_event);
+        applyRemoteControl(d.dashboard_control);
       } catch (e) { /* retry next tick */ }
     }
 
@@ -741,6 +744,136 @@
       repeatBtnEl.style.opacity = '1';
       repeatBtnEl.style.background = '#dbeafe';
       repeatBtnEl.style.borderRadius = '6px';
+    }
+
+    // ── Remote dashboard control from admin ──────────
+    let lastMusicCmdTs = null;
+    let lastPlanTimerCmdTs = null;
+    let pendingPlay = false;
+    // Track last-known remote state so we only apply when admin actually changes it
+    let lastRemote = {};
+
+    // Auto-unlock audio on first user interaction so remote commands work
+    function tryUnlockAudio() {
+      if (audioEl.src) {
+        const t = audioEl.currentTime;
+        audioEl.play().then(() => { audioEl.pause(); audioEl.currentTime = t; }).catch(() => {});
+      }
+      document.removeEventListener('click', tryUnlockAudio, true);
+      document.removeEventListener('touchstart', tryUnlockAudio, true);
+    }
+    document.addEventListener('click', tryUnlockAudio, true);
+    document.addEventListener('touchstart', tryUnlockAudio, true);
+
+    function showAudioBanner() {
+      document.getElementById('audioUnlockBanner').style.display = '';
+    }
+
+    function dismissAudioBanner() {
+      document.getElementById('audioUnlockBanner').style.display = 'none';
+      if (pendingPlay && songList.length) {
+        if (currentSongIdx < 0) { currentSongIdx = 0; loadCurrentSong(); }
+        audioEl.play().catch(() => {});
+        document.getElementById('playPauseBtn').textContent = '\u23f8';
+        pendingPlay = false;
+      }
+    }
+
+    function safePlay() {
+      audioEl.play().catch(function() {
+        pendingPlay = true;
+        showAudioBanner();
+      });
+      document.getElementById('playPauseBtn').textContent = '\u23f8';
+    }
+
+    function applyRemoteControl(ctrl) {
+      if (!ctrl) return;
+      // Only apply toggle states when the REMOTE value changed (admin toggled it),
+      // not when it merely differs from local state (user toggled on dashboard).
+      if (ctrl.timer_visible !== undefined && ctrl.timer_visible !== lastRemote.timer_visible) {
+        timerVisible = ctrl.timer_visible;
+        document.getElementById('timerPanel').style.display = timerVisible ? '' : 'none';
+        document.getElementById('planningTimer').style.display = timerVisible ? '' : 'none';
+        setToggleBtnState('toggleTimerBtn', timerVisible);
+      }
+      if (ctrl.game_rank_visible !== undefined && ctrl.game_rank_visible !== lastRemote.game_rank_visible) {
+        gameRankVisible = ctrl.game_rank_visible;
+        document.getElementById('gameRankPanel').style.display = gameRankVisible ? '' : 'none';
+        setToggleBtnState('toggleGameRankBtn', gameRankVisible);
+      }
+      if (ctrl.series_visible !== undefined && ctrl.series_visible !== lastRemote.series_visible) {
+        const el = document.getElementById('allRanking');
+        const title = document.getElementById('seriesTitle');
+        if (el) el.style.display = ctrl.series_visible ? '' : 'none';
+        if (title) title.style.display = ctrl.series_visible ? '' : 'none';
+        setToggleBtnState('toggleSeriesBtn', ctrl.series_visible);
+      }
+      if (ctrl.qr_visible !== undefined && ctrl.qr_visible !== lastRemote.qr_visible) {
+        const container = document.getElementById('qrContainer');
+        if (container) {
+          container.style.display = ctrl.qr_visible ? 'block' : 'none';
+          setToggleBtnState('topToggleQrBtn', ctrl.qr_visible);
+          localStorage.setItem('qr_visible', ctrl.qr_visible ? 'true' : 'false');
+        }
+      }
+      // Apply repeat state only when remote changes
+      if (ctrl.repeat_one !== undefined && ctrl.repeat_one !== lastRemote.repeat_one) {
+        repeatOne = ctrl.repeat_one;
+        const btn = document.getElementById('repeatBtn');
+        if (btn) {
+          btn.style.opacity = repeatOne ? '1' : '0.4';
+          btn.style.background = repeatOne ? '#dbeafe' : 'none';
+          btn.style.borderRadius = '6px';
+        }
+      }
+      // Execute planning timer commands (one-time)
+      if (ctrl.plan_timer_cmd && ctrl.plan_timer_cmd_ts && ctrl.plan_timer_cmd_ts !== lastPlanTimerCmdTs) {
+        lastPlanTimerCmdTs = ctrl.plan_timer_cmd_ts;
+        if (ctrl.plan_timer_cmd === 'start') {
+          document.getElementById('planMin').value = ctrl.plan_timer_min || 10;
+          document.getElementById('planSec').value = ctrl.plan_timer_sec || 0;
+          startPlanTimer();
+        } else if (ctrl.plan_timer_cmd === 'reset') {
+          resetPlanTimer();
+        }
+      }
+      // Execute music commands (one-time)
+      if (ctrl.music_cmd && ctrl.music_cmd_ts && ctrl.music_cmd_ts !== lastMusicCmdTs) {
+        lastMusicCmdTs = ctrl.music_cmd_ts;
+        if (ctrl.music_cmd === 'play') {
+          if (songList.length) {
+            // If a specific song index was requested, jump to it
+            if (ctrl.music_song_idx != null && ctrl.music_song_idx >= 0 && ctrl.music_song_idx < songList.length) {
+              currentSongIdx = ctrl.music_song_idx;
+              loadCurrentSong();
+            } else if (currentSongIdx < 0) {
+              currentSongIdx = 0;
+              loadCurrentSong();
+            }
+            audioEl.play().catch(function() {
+              pendingPlay = true;
+              showAudioBanner();
+            });
+            document.getElementById('playPauseBtn').textContent = '\u23f8';
+          }
+        } else if (ctrl.music_cmd === 'pause') {
+          audioEl.pause();
+          document.getElementById('playPauseBtn').textContent = '\u25b6';
+        } else if (ctrl.music_cmd === 'next') {
+          nextSong();
+        } else if (ctrl.music_cmd === 'prev') {
+          prevSong();
+        }
+      }
+      // Snapshot the remote state so next poll only reacts to actual remote changes
+      lastRemote = {
+        timer_visible: ctrl.timer_visible,
+        game_rank_visible: ctrl.game_rank_visible,
+        series_visible: ctrl.series_visible,
+        qr_visible: ctrl.qr_visible,
+        repeat_one: ctrl.repeat_one
+      };
     }
   </script>
 </body>
