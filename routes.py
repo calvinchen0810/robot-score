@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import json
@@ -1028,6 +1028,7 @@ def export_database(db: Session = Depends(get_db), _auth=Depends(_require_admin)
         "score_buttons": [],
         "team_scores": [],
         "songs": [],
+        "admin_settings": [],
     }
     for s in db.query(Series).all():
         data["series"].append({
@@ -1077,9 +1078,17 @@ def export_database(db: Session = Depends(get_db), _auth=Depends(_require_admin)
             "id": sg.id, "title": sg.title, "url": sg.url,
             "display_order": sg.display_order, "series_id": sg.series_id,
         })
-    return JSONResponse(
-        content=data,
-        headers={"Content-Disposition": "attachment; filename=robot_score_backup.json"},
+    for a in db.query(AdminSetting).all():
+        if a.key == 'admin_password_hash':
+            continue  # skip password hash for security
+        data["admin_settings"].append({
+            "id": a.id, "key": a.key, "value": a.value,
+        })
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return Response(
+        content=json.dumps(data, indent=2, ensure_ascii=False),
+        media_type="application/json",
+        headers={"Content-Disposition": f"attachment; filename=robot_score_{ts}.json"},
     )
 
 
@@ -1159,5 +1168,13 @@ async def import_database(file: UploadFile = File(...), db: Session = Depends(ge
             id=sg["id"], title=sg["title"], url=sg["url"],
             display_order=sg.get("display_order", 0), series_id=sg["series_id"],
         ))
+    for a in data.get("admin_settings", []):
+        if a.get("key") == 'admin_password_hash':
+            continue  # never import password hash
+        existing = db.query(AdminSetting).filter(AdminSetting.key == a["key"]).first()
+        if existing:
+            existing.value = a["value"]
+        else:
+            db.add(AdminSetting(key=a["key"], value=a["value"]))
     db.commit()
     return {"ok": True, "message": "Database imported successfully"}
