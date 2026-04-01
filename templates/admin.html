@@ -87,7 +87,12 @@
           </div>
         </div>
       </div>
-      <div id="seriesList"></div>
+      <div class="card" style="padding:10px 14px;margin-bottom:6px">
+        <h3 style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px;font-size:0.95rem;margin:0 0 4px" onclick="var b=document.getElementById('seriesListBody');b.style.display=b.style.display==='none'?'':'none';this.querySelector('.chevron').textContent=b.style.display==='none'?'▸':'▾'">Series List <span class="chevron" style="font-size:0.8rem;color:#94a3b8">▾</span></h3>
+        <div id="seriesListBody">
+          <div id="seriesList"></div>
+        </div>
+      </div>
     </div>
 
     <!-- ═══ TAB: Buttons ══════════════════════════════ -->
