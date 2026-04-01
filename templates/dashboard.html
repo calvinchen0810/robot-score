@@ -508,21 +508,30 @@
       if (!game || game.remaining_seconds == null) return '';
       if (game.status === 'stopped') return '';
       const rem = Math.max(0, Math.ceil(game.remaining_seconds));
+      const total = game.duration_seconds || 0;
       const mins = Math.floor(rem / 60);
       const secs = rem % 60;
-      const color = rem <= 10 ? '#dc2626' : rem <= 30 ? '#f59e0b' : '#16a34a';
+      // Red if < 5%, orange if < 30% remaining, green otherwise
+      let color = '#16a34a';
+      if (total > 0 && (rem / total) < 0.2) {
+        color = '#dc2626';
+      } else if (total > 0 && (rem / total) < 0.4) {
+        color = '#f59e0b';
+      }
       return '<div style="font-weight:800;color:' + color + ';font-size:4rem;margin-top:4px;text-align:center">⏱ ' + mins + ':' + String(secs).padStart(2, '0') + '</div>';
     }
 
     // Planning countdown timer state
     let planEnd = null;
     let planInterval = null;
+    let planTotalSecs = 0;
 
     function startPlanTimer() {
       const mins = parseInt(document.getElementById('planMin').value) || 0;
       const secs = parseInt(document.getElementById('planSec').value) || 0;
       const total = mins * 60 + secs;
       if (total <= 0) return;
+      planTotalSecs = total;
       planEnd = Date.now() + total * 1000;
       document.getElementById('planningEdit').style.display = 'none';
       document.getElementById('planningDisplay').style.display = '';
@@ -537,7 +546,13 @@
       const secs = rem % 60;
       const el = document.getElementById('planCountdown');
       el.textContent = '⏱ ' + mins + ':' + String(secs).padStart(2, '0');
-      el.style.color = rem <= 180 ? '#dc2626' : rem <= 300 ? '#f59e0b' : '#3b82f6';
+      let color = '#3b82f6';
+      if (planTotalSecs > 0 && (rem / planTotalSecs) < 0.2) {
+        color = '#dc2626';
+      } else if (planTotalSecs > 0 && (rem / planTotalSecs) < 0.4) {
+        color = '#f59e0b';
+      }
+      el.style.color = color;
       if (rem <= 0) {
         clearInterval(planInterval);
         planInterval = null;

@@ -1091,6 +1091,7 @@
         var totalSec = (rcState.plan_timer_min || 0) * 60 + (rcState.plan_timer_sec || 0);
         var endTime = cmdTime + totalSec * 1000;
         if (endTime > Date.now()) {
+          adminPlanTotalSecs = totalSec;
           adminPlanEnd = endTime;
           if (adminPlanInterval) clearInterval(adminPlanInterval);
           adminPlanInterval = setInterval(tickAdminPlanTimer, 200);
@@ -1129,6 +1130,7 @@
 
     let adminPlanEnd = null;
     let adminPlanInterval = null;
+    let adminPlanTotalSecs = 0;
 
     function tickAdminPlanTimer() {
       const el = document.getElementById('rcPlanCountdown');
@@ -1137,7 +1139,13 @@
       const m = Math.floor(rem / 60);
       const s = rem % 60;
       el.textContent = '\u23f1 ' + m + ':' + String(s).padStart(2, '0');
-      el.style.color = rem <= 180 ? '#dc2626' : rem <= 300 ? '#f59e0b' : '#3b82f6';
+      let color = '#3b82f6';
+      if (adminPlanTotalSecs > 0 && (rem / adminPlanTotalSecs) < 0.2) {
+        color = '#dc2626';
+      } else if (adminPlanTotalSecs > 0 && (rem / adminPlanTotalSecs) < 0.4) {
+        color = '#f59e0b';
+      }
+      el.style.color = color;
       el.style.display = '';
       document.getElementById('rcPlanEdit').style.display = 'none';
       document.getElementById('rcPlanResetWrap').style.display = '';
@@ -1165,6 +1173,7 @@
       if (cmd === 'start') {
         const total = mins * 60 + secs;
         if (total <= 0) return;
+        adminPlanTotalSecs = total;
         adminPlanEnd = Date.now() + total * 1000;
         if (adminPlanInterval) clearInterval(adminPlanInterval);
         adminPlanInterval = setInterval(tickAdminPlanTimer, 200);

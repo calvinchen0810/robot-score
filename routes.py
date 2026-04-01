@@ -896,7 +896,7 @@ def dashboard_data(db: Session = Depends(get_db)):
     return {
         "series": {"id": series.id, "name": series.name},
         "active_game": {"id": active_game.id, "name": active_game.name, "status": active_game.status} if active_game else None,
-        "active_round": {"id": active_round.id, "name": active_round.name, "status": active_round.status, "remaining_seconds": _remaining(active_round)} if active_round else None,
+        "active_round": {"id": active_round.id, "name": active_round.name, "status": active_round.status, "remaining_seconds": _remaining(active_round), "duration_seconds": active_round.duration_seconds} if active_round else None,
         "rounds": rounds_info,
         "game_ranking": game_ranking,
         "all_ranking": all_ranking,
@@ -944,7 +944,7 @@ def get_active(db: Session = Depends(get_db)):
     return {
         "series": {"id": series.id, "name": series.name},
         "game": {"id": game.id, "name": game.name, "status": game.status} if game else None,
-        "active_round": {"id": active_round.id, "name": active_round.name, "status": active_round.status, "remaining_seconds": _remaining(active_round)} if active_round else None,
+        "active_round": {"id": active_round.id, "name": active_round.name, "status": active_round.status, "remaining_seconds": _remaining(active_round), "duration_seconds": active_round.duration_seconds} if active_round else None,
         "buttons": [
             {
                 "id": b.id, "label": b.label, "image_url": b.image_url,
