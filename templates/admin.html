@@ -26,6 +26,7 @@
       <button id="rcGameBtn" onclick="rcToggle('game_rank_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">🏁 Game</button>
       <button id="rcSeriesBtn" onclick="rcToggle('series_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">🏆 Series</button>
       <button id="rcQrBtn" onclick="rcToggle('qr_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">🔗 QR</button>
+      <button id="rcCamBtn" onclick="rcToggle('cam_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">📷 Cam</button>
     </div>
   </div>
 
@@ -1037,6 +1038,7 @@
       setRcBtn('rcGameBtn', rcState.game_rank_visible);
       setRcBtn('rcSeriesBtn', rcState.series_visible);
       setRcBtn('rcQrBtn', rcState.qr_visible);
+      setRcBtn('rcCamBtn', rcState.cam_visible);
       // Repeat button
       const repBtn = document.getElementById('rcRepeatBtn');
       if (repBtn) {

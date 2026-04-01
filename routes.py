@@ -35,6 +35,7 @@ _dashboard_control: dict = {
     "game_rank_visible": False,
     "series_visible": False,
     "qr_visible": True,
+    "cam_visible": False,
     "repeat_one": True,
     "music_cmd": None,
     "music_cmd_ts": None,
@@ -150,7 +151,7 @@ def get_dashboard_control(_auth=Depends(_require_admin)):
 @router.put("/admin/dashboard_control")
 def update_dashboard_control(data: dict, _auth=Depends(_require_admin)):
     global _dashboard_control
-    for key in ("timer_visible", "game_rank_visible", "series_visible", "qr_visible", "repeat_one"):
+    for key in ("timer_visible", "game_rank_visible", "series_visible", "qr_visible", "cam_visible", "repeat_one"):
         if key in data:
             _dashboard_control[key] = bool(data[key])
     if "plan_timer_cmd" in data and data["plan_timer_cmd"] in ("start", "reset"):

@@ -146,6 +146,92 @@
     }
     .draw-dismiss:hover { background: #2563eb; }
     .draw-dismiss.visible { display: block; animation: fadeIn 0.5s ease-out; }
+
+    /* ── Webcam preview ─── */
+    #webcamPanel {
+      display: none; position: fixed; z-index: 90;
+      bottom: 80px; right: 20px;
+      width: 320px; background: #0f172a; border-radius: 14px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.35); overflow: hidden;
+      border: 2px solid #334155; resize: both;
+    }
+    #webcamPanel.active { display: block; }
+    #webcamHeader {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 12px; background: #1e293b; cursor: move; user-select: none;
+    }
+    #webcamHeader span { color: #94a3b8; font-size: 0.8rem; font-weight: 600; }
+    #webcamHeader button {
+      background: none; border: none; color: #94a3b8; font-size: 1rem;
+      cursor: pointer; padding: 2px 6px; border-radius: 4px;
+    }
+    #webcamHeader button:hover { background: #334155; color: #e2e8f0; }
+    #webcamVideo {
+      width: 100%; display: block; background: #000;
+    }
+    #webcamError {
+      color: #f87171; font-size: 0.82rem; text-align: center;
+      padding: 24px 12px; display: none;
+    }
+
+    /* ── Webcam maximized mode ─── */
+    #webcamPanel.maximized {
+      position: fixed; top: 46px; left: 0;
+      right: calc(100% - var(--cam-split, 75%));
+      bottom: 60px;
+      width: auto; height: auto;
+      border-radius: 0; border: none; box-shadow: none;
+      z-index: 50; resize: none;
+    }
+    #webcamPanel.maximized #webcamHeader {
+      position: absolute; top: 0; left: 0; right: 0; z-index: 52;
+      background: rgba(30,41,59,0.75); backdrop-filter: blur(4px); cursor: default;
+    }
+    #webcamPanel.maximized #webcamVideo {
+      width: 100%; height: 100%; object-fit: cover;
+    }
+
+    /* Draggable splitter handle */
+    #camSplitter {
+      display: none; position: fixed; top: 46px;
+      left: var(--cam-split, 75%); bottom: 60px;
+      width: 8px; margin-left: -4px;
+      z-index: 58; cursor: col-resize;
+      background: transparent;
+    }
+    #camSplitter::after {
+      content: ''; position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 4px; height: 48px; border-radius: 4px;
+      background: #94a3b8; opacity: 0.6; transition: opacity 0.2s;
+    }
+    #camSplitter:hover::after { opacity: 1; background: #3b82f6; }
+    body.cam-maximized #camSplitter { display: block; }
+
+    /* Ranking / timer panel (right side) when webcam maximized */
+    body.cam-maximized .dashboard-wrap {
+      position: fixed; top: 46px; right: 0; bottom: 60px;
+      left: var(--cam-split, 75%);
+      width: auto; z-index: 55;
+      padding: 12px 16px; margin: 0; max-width: none;
+      background: #ffffff;
+      overflow-y: auto; border-left: 2px solid #e2e8f0;
+      pointer-events: auto;
+    }
+    body.cam-maximized .dashboard-wrap .dashboard-header h1 { font-size: 2rem; }
+    body.cam-maximized .rank-row { padding: 6px 10px; }
+    body.cam-maximized .rank-row:nth-child(1) { padding: 10px 14px; }
+    body.cam-maximized .rank-row:nth-child(2) { padding: 8px 14px; }
+    body.cam-maximized .rank-row:nth-child(1) .rank-name { font-size: 1.3rem; }
+    body.cam-maximized .rank-row:nth-child(2) .rank-name { font-size: 1.1rem; }
+    body.cam-maximized .rank-row:nth-child(1) .rank-score { font-size: 1.6rem; }
+    body.cam-maximized .rank-row:nth-child(2) .rank-score { font-size: 1.3rem; }
+    body.cam-maximized .rank-row:nth-child(1) .rank-pos { font-size: 1.4rem; }
+    body.cam-maximized .rank-row:nth-child(2) .rank-pos { font-size: 1.2rem; }
+    /* Stack start-point & game name on separate lines in cam mode */
+    body.cam-maximized .rank-name { display: flex; flex-direction: column; gap: 2px; align-items: center; }
+    body.cam-maximized .rank-name .rank-start-order,
+    body.cam-maximized .rank-name .rank-game-tag { display: block; margin-left: 0; }
   </style>
 </head>
 <body>
@@ -156,6 +242,7 @@
       <button id="toggleGameRankBtn" onclick="toggleGameRanking()" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">🏁 Game</button>
       <button id="toggleSeriesBtn" onclick="toggleSeriesRanking()" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">🏆 Series</button>
       <button id="topToggleQrBtn" onclick="toggleQr()" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;display:none">🔗 QR</button>
+      <button id="toggleWebcamBtn" onclick="toggleWebcam()" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">📷 Cam</button>
     </div>
   </div>
 
@@ -227,6 +314,21 @@
       </div>
       <audio id="audioEl" preload="auto"></audio>
     </div>
+    <!-- Webcam preview panel -->
+    <div id="webcamPanel">
+      <div id="webcamHeader">
+        <span>📷 Live Camera</span>
+        <div>
+          <button onclick="flipWebcam()" title="Switch camera">🔄</button>
+          <button onclick="toggleWebcam()" title="Close">✕</button>
+        </div>
+      </div>
+      <video id="webcamVideo" autoplay playsinline muted></video>
+      <div id="webcamError">Camera unavailable</div>
+    </div>
+    <!-- Draggable split handle -->
+    <div id="camSplitter"></div>
+
     <!-- Banner shown when browser blocks remote audio playback -->
     <div id="audioUnlockBanner" onclick="dismissAudioBanner()" style="display:none;position:fixed;top:0;left:0;right:0;background:#fbbf24;color:#1e293b;text-align:center;padding:12px;font-weight:700;font-size:1rem;cursor:pointer;z-index:200">🔊 Click here to enable remote audio playback</div>
   </div>
@@ -307,7 +409,7 @@
           }
           return esc(d.button_label) + ':<span style="font-size:1.3rem;font-weight:700">' + d.clicks + '</span>';
         }).join(' &nbsp; ');
-        const gameTag = r.game_name ? '<span class="game-tag">' + esc(r.game_name) + '</span>' : '';
+        const gameTag = r.game_name ? '<span class="game-tag rank-game-tag">' + esc(r.game_name) + '</span>' : '';
         const iconSizes = ['2.2rem', '1.9rem'];
         const icon = i < 2 ? '<span style="font-size:' + iconSizes[i] + ';margin-right:4px">' + icons[i] + '</span>' : '';
         const posText = i < 2 ? icon : '<span>#' + (i + 1) + '</span>';
@@ -334,7 +436,7 @@
 
         return '<div class="' + rowClass + '">'
           + '<div class="rank-pos">' + posText + '</div>'
-          + '<div class="rank-name">' + esc(r.team_name) + (r.start_order ? ' <span class="game-tag">起點 #' + r.start_order + '</span>' : '') + changeHtml + gameTag + '</div>'
+          + '<div class="rank-name"><span>' + esc(r.team_name) + changeHtml + '</span>' + (r.start_order ? '<span class="game-tag rank-start-order">起點 #' + r.start_order + '</span>' : '') + gameTag + '</div>'
           + '<div class="rank-detail">' + details + '</div>'
           + '<div class="rank-score">' + r.total_points + '</div>'
           + '</div>';
@@ -746,6 +848,120 @@
       repeatBtnEl.style.borderRadius = '6px';
     }
 
+    // ── Webcam preview ─────────────────────────────
+    let webcamStream = null;
+    let webcamActive = false;
+    let webcamFacingMode = 'environment'; // start with rear camera
+
+    async function startWebcam() {
+      const video = document.getElementById('webcamVideo');
+      const errEl = document.getElementById('webcamError');
+      errEl.style.display = 'none';
+      video.style.display = 'block';
+      try {
+        if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); }
+        webcamStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: webcamFacingMode }, audio: false
+        });
+        video.srcObject = webcamStream;
+      } catch (e) {
+        video.style.display = 'none';
+        errEl.style.display = '';
+        errEl.textContent = '📷 ' + (e.name === 'NotAllowedError' ? 'Camera permission denied' : 'Camera unavailable');
+      }
+    }
+
+    function stopWebcam() {
+      if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); webcamStream = null; }
+      const video = document.getElementById('webcamVideo');
+      if (video) video.srcObject = null;
+    }
+
+    function toggleWebcam() {
+      webcamActive = !webcamActive;
+      const panel = document.getElementById('webcamPanel');
+      if (webcamActive) {
+        // Go directly to fullscreen/maximized mode
+        panel.classList.add('active');
+        panel.classList.add('maximized');
+        panel.style.left = ''; panel.style.top = '';
+        panel.style.right = ''; panel.style.bottom = '';
+        document.body.classList.add('cam-maximized');
+        startWebcam();
+      } else {
+        panel.classList.remove('active');
+        panel.classList.remove('maximized');
+        document.body.classList.remove('cam-maximized');
+        stopWebcam();
+      }
+      setToggleBtnState('toggleWebcamBtn', webcamActive);
+    }
+
+    let webcamMaximized = false;
+
+    function flipWebcam() {
+      webcamFacingMode = webcamFacingMode === 'environment' ? 'user' : 'environment';
+      if (webcamActive) startWebcam();
+    }
+
+    // Draggable splitter for cam/ranking split
+    (function() {
+      const splitter = document.getElementById('camSplitter');
+      let splitting = false;
+      function onStart(clientX) { splitting = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; }
+      function onMove(clientX) {
+        if (!splitting) return;
+        const pct = Math.min(90, Math.max(30, (clientX / window.innerWidth) * 100));
+        document.documentElement.style.setProperty('--cam-split', pct + '%');
+      }
+      function onEnd() { splitting = false; document.body.style.cursor = ''; document.body.style.userSelect = ''; }
+      splitter.addEventListener('mousedown', function(e) { onStart(e.clientX); e.preventDefault(); });
+      document.addEventListener('mousemove', function(e) { onMove(e.clientX); });
+      document.addEventListener('mouseup', onEnd);
+      splitter.addEventListener('touchstart', function(e) { onStart(e.touches[0].clientX); }, { passive: true });
+      document.addEventListener('touchmove', function(e) { if (splitting) onMove(e.touches[0].clientX); }, { passive: true });
+      document.addEventListener('touchend', onEnd);
+    })();
+
+    // Draggable webcam panel (mini mode)
+    (function() {
+      const header = document.getElementById('webcamHeader');
+      const panel = document.getElementById('webcamPanel');
+      let dragging = false, startX, startY, origX, origY;
+      header.addEventListener('mousedown', function(e) {
+        if (e.target.tagName === 'BUTTON' || webcamMaximized) return;
+        dragging = true;
+        startX = e.clientX; startY = e.clientY;
+        const rect = panel.getBoundingClientRect();
+        origX = rect.left; origY = rect.top;
+        e.preventDefault();
+      });
+      document.addEventListener('mousemove', function(e) {
+        if (!dragging) return;
+        panel.style.left = (origX + e.clientX - startX) + 'px';
+        panel.style.top = (origY + e.clientY - startY) + 'px';
+        panel.style.right = 'auto'; panel.style.bottom = 'auto';
+      });
+      document.addEventListener('mouseup', function() { dragging = false; });
+      // Touch support
+      header.addEventListener('touchstart', function(e) {
+        if (e.target.tagName === 'BUTTON' || webcamMaximized) return;
+        dragging = true;
+        const t = e.touches[0];
+        startX = t.clientX; startY = t.clientY;
+        const rect = panel.getBoundingClientRect();
+        origX = rect.left; origY = rect.top;
+      }, { passive: true });
+      document.addEventListener('touchmove', function(e) {
+        if (!dragging) return;
+        const t = e.touches[0];
+        panel.style.left = (origX + t.clientX - startX) + 'px';
+        panel.style.top = (origY + t.clientY - startY) + 'px';
+        panel.style.right = 'auto'; panel.style.bottom = 'auto';
+      }, { passive: true });
+      document.addEventListener('touchend', function() { dragging = false; });
+    })();
+
     // ── Remote dashboard control from admin ──────────
     let lastMusicCmdTs = null;
     let lastPlanTimerCmdTs = null;
@@ -817,6 +1033,14 @@
           localStorage.setItem('qr_visible', ctrl.qr_visible ? 'true' : 'false');
         }
       }
+      // Remote cam toggle
+      if (ctrl.cam_visible !== undefined && ctrl.cam_visible !== lastRemote.cam_visible) {
+        if (ctrl.cam_visible && !webcamActive) {
+          toggleWebcam();
+        } else if (!ctrl.cam_visible && webcamActive) {
+          toggleWebcam();
+        }
+      }
       // Apply repeat state only when remote changes
       if (ctrl.repeat_one !== undefined && ctrl.repeat_one !== lastRemote.repeat_one) {
         repeatOne = ctrl.repeat_one;
@@ -872,6 +1096,7 @@
         game_rank_visible: ctrl.game_rank_visible,
         series_visible: ctrl.series_visible,
         qr_visible: ctrl.qr_visible,
+        cam_visible: ctrl.cam_visible,
         repeat_one: ctrl.repeat_one
       };
     }
