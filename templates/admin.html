@@ -27,6 +27,7 @@
       <button id="rcSeriesBtn" onclick="rcToggle('series_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">🏆 Series</button>
       <button id="rcQrBtn" onclick="rcToggle('qr_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">🔗 QR</button>
       <button id="rcCamBtn" onclick="rcToggle('cam_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">📷 Cam</button>
+      <button id="rcSlidesBtn" onclick="rcToggle('slides_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">📊 Slides</button>
     </div>
   </div>
 
@@ -181,6 +182,15 @@
         <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="allowCreateTeam"> <span>Allow create</span></label>
         <button class="btn btn-primary btn-block btn-sm mt-2" onclick="saveAdminAllowCreate()">Save</button>
         <div id="allowCreateStatus" class="mt-2"></div>
+      </div>
+      <div class="card">
+        <h3>📊 Google Slides (Dashboard)</h3>
+        <p class="text-sm text-muted mb-2">Paste a Google Slides share/edit URL to embed on the dashboard.</p>
+        <label>Slides URL</label>
+        <input type="url" id="slideUrl" placeholder="https://docs.google.com/presentation/d/.../edit">
+        <button class="btn btn-primary btn-block btn-sm mt-2" onclick="saveSlideUrl()">Save</button>
+        <button class="btn btn-sm mt-2" style="background:#e2e8f0;color:#334155" onclick="clearSlideUrl()">Clear</button>
+        <div id="slideStatus" class="mt-2"></div>
       </div>
     </div>  </div>
 
@@ -937,6 +947,14 @@
             document.getElementById('allowCreateTeam').checked = !!d2.allow_create_team;
           }
         } catch(e) {}
+        // load slide_url setting
+        try {
+          const r3 = await fetch('/api/admin/slide_url', { headers: authHeaders() });
+          if (r3.ok) {
+            const d3 = await r3.json();
+            if (d3.slide_url) document.getElementById('slideUrl').value = d3.slide_url;
+          }
+        } catch(e) {}
       } catch(e) {}
     }
 
@@ -971,6 +989,26 @@
         if (res.ok) st.innerHTML = '<span style="color:#16a34a">✅ Saved</span>';
         else st.innerHTML = '<span style="color:#dc2626">❌ ' + (data.detail || 'Failed') + '</span>';
       } catch(e) { st.innerHTML = '<span style="color:#dc2626">❌ ' + e.message + '</span>'; }
+    }
+
+    async function saveSlideUrl() {
+      const url = document.getElementById('slideUrl').value.trim();
+      const st = document.getElementById('slideStatus');
+      st.innerHTML = '';
+      try {
+        const res = await fetch('/api/admin/slide_url', {
+          method: 'PUT', headers: Object.assign({'Content-Type':'application/json'}, authHeaders()),
+          body: JSON.stringify({ slide_url: url })
+        });
+        const data = await res.json();
+        if (res.ok) st.innerHTML = '<span style="color:#16a34a">✅ Saved</span>';
+        else st.innerHTML = '<span style="color:#dc2626">❌ ' + (data.detail || 'Failed') + '</span>';
+      } catch(e) { st.innerHTML = '<span style="color:#dc2626">❌ ' + e.message + '</span>'; }
+    }
+
+    async function clearSlideUrl() {
+      document.getElementById('slideUrl').value = '';
+      await saveSlideUrl();
     }
 
     /* ── Database Export / Import ──────────────────────── */
@@ -1039,6 +1077,7 @@
       setRcBtn('rcSeriesBtn', rcState.series_visible);
       setRcBtn('rcQrBtn', rcState.qr_visible);
       setRcBtn('rcCamBtn', rcState.cam_visible);
+      setRcBtn('rcSlidesBtn', rcState.slides_visible);
       // Repeat button
       const repBtn = document.getElementById('rcRepeatBtn');
       if (repBtn) {

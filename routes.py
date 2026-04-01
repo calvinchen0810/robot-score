@@ -36,6 +36,7 @@ _dashboard_control: dict = {
     "series_visible": False,
     "qr_visible": True,
     "cam_visible": False,
+    "slides_visible": False,
     "repeat_one": True,
     "music_cmd": None,
     "music_cmd_ts": None,
@@ -121,6 +122,28 @@ def set_qr_image(data: dict, db: Session = Depends(get_db), _auth=Depends(_requi
     return {"ok": True, "qr_image": url}
 
 
+@router.get("/admin/slide_url")
+def get_slide_url(db: Session = Depends(get_db), _auth=Depends(_require_admin)):
+    row = db.query(AdminSetting).filter(AdminSetting.key == 'slide_url').first()
+    return {"slide_url": row.value if row else None}
+
+
+@router.put("/admin/slide_url")
+def set_slide_url(data: dict, db: Session = Depends(get_db), _auth=Depends(_require_admin)):
+    url = (data.get('slide_url') or '').strip() if isinstance(data, dict) else ''
+    row = db.query(AdminSetting).filter(AdminSetting.key == 'slide_url').first()
+    if url:
+        if row:
+            row.value = url
+        else:
+            db.add(AdminSetting(key='slide_url', value=url))
+    else:
+        if row:
+            db.delete(row)
+    db.commit()
+    return {"ok": True, "slide_url": url or None}
+
+
 @router.get("/admin/allow_create_team")
 def get_allow_create_team(db: Session = Depends(get_db), _auth=Depends(_require_admin)):
     row = db.query(AdminSetting).filter(AdminSetting.key == 'allow_create_team').first()
@@ -151,7 +174,7 @@ def get_dashboard_control(_auth=Depends(_require_admin)):
 @router.put("/admin/dashboard_control")
 def update_dashboard_control(data: dict, _auth=Depends(_require_admin)):
     global _dashboard_control
-    for key in ("timer_visible", "game_rank_visible", "series_visible", "qr_visible", "cam_visible", "repeat_one"):
+    for key in ("timer_visible", "game_rank_visible", "series_visible", "qr_visible", "cam_visible", "slides_visible", "repeat_one"):
         if key in data:
             _dashboard_control[key] = bool(data[key])
     if "plan_timer_cmd" in data and data["plan_timer_cmd"] in ("start", "reset"):
@@ -883,6 +906,8 @@ def dashboard_data(db: Session = Depends(get_db)):
         "draw_event": draw_to_send,
         "qr_image": (db.query(AdminSetting).filter(AdminSetting.key == 'qr_image').first().value
                      if db.query(AdminSetting).filter(AdminSetting.key == 'qr_image').first() else None),
+        "slide_url": (db.query(AdminSetting).filter(AdminSetting.key == 'slide_url').first().value
+                      if db.query(AdminSetting).filter(AdminSetting.key == 'slide_url').first() else None),
         "dashboard_control": _dashboard_control,
     }
 

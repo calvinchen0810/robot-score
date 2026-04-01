@@ -232,6 +232,57 @@
     body.cam-maximized .rank-name { display: flex; flex-direction: column; gap: 2px; align-items: center; }
     body.cam-maximized .rank-name .rank-start-order,
     body.cam-maximized .rank-name .rank-game-tag { display: block; margin-left: 0; }
+
+    /* ── Google Slides fullscreen panel ─── */
+    #slidesPanel {
+      display: none; position: fixed; top: 46px; left: 0;
+      right: calc(100% - var(--slides-split, 75%));
+      bottom: 60px; z-index: 48; background: #000;
+    }
+    #slidesPanel.active { display: flex; flex-direction: column; }
+    #slidesPanel iframe {
+      flex: 1; width: 100%; height: 100%; border: none; background: #000;
+    }
+
+    /* Slides splitter handle */
+    #slidesSplitter {
+      display: none; position: fixed; top: 46px;
+      left: var(--slides-split, 75%); bottom: 60px;
+      width: 8px; margin-left: -4px;
+      z-index: 58; cursor: col-resize; background: transparent;
+    }
+    #slidesSplitter::after {
+      content: ''; position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 4px; height: 48px; border-radius: 4px;
+      background: #94a3b8; opacity: 0.6; transition: opacity 0.2s;
+    }
+    #slidesSplitter:hover::after { opacity: 1; background: #3b82f6; }
+    body.slides-active #slidesSplitter { display: block; }
+
+    /* Ranking / timer panel (right side) when slides active */
+    body.slides-active .dashboard-wrap {
+      position: fixed; top: 46px; right: 0; bottom: 60px;
+      left: var(--slides-split, 75%);
+      width: auto; z-index: 55;
+      padding: 12px 16px; margin: 0; max-width: none;
+      background: #ffffff;
+      overflow-y: auto; border-left: 2px solid #e2e8f0;
+      pointer-events: auto;
+    }
+    body.slides-active .dashboard-wrap .dashboard-header h1 { font-size: 2rem; }
+    body.slides-active .rank-row { padding: 6px 10px; }
+    body.slides-active .rank-row:nth-child(1) { padding: 10px 14px; }
+    body.slides-active .rank-row:nth-child(2) { padding: 8px 14px; }
+    body.slides-active .rank-row:nth-child(1) .rank-name { font-size: 1.3rem; }
+    body.slides-active .rank-row:nth-child(2) .rank-name { font-size: 1.1rem; }
+    body.slides-active .rank-row:nth-child(1) .rank-score { font-size: 1.6rem; }
+    body.slides-active .rank-row:nth-child(2) .rank-score { font-size: 1.3rem; }
+    body.slides-active .rank-row:nth-child(1) .rank-pos { font-size: 1.4rem; }
+    body.slides-active .rank-row:nth-child(2) .rank-pos { font-size: 1.2rem; }
+    body.slides-active .rank-name { display: flex; flex-direction: column; gap: 2px; align-items: center; }
+    body.slides-active .rank-name .rank-start-order,
+    body.slides-active .rank-name .rank-game-tag { display: block; margin-left: 0; }
   </style>
 </head>
 <body>
@@ -243,6 +294,7 @@
       <button id="toggleSeriesBtn" onclick="toggleSeriesRanking()" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">🏆 Series</button>
       <button id="topToggleQrBtn" onclick="toggleQr()" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;display:none">🔗 QR</button>
       <button id="toggleWebcamBtn" onclick="toggleWebcam()" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer">📷 Cam</button>
+      <button id="toggleSlidesBtn" onclick="toggleSlides()" style="background:#e2e8f0;color:#334155;border:none;padding:5px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;display:none">📊 Slides</button>
     </div>
   </div>
 
@@ -328,6 +380,12 @@
     </div>
     <!-- Draggable split handle -->
     <div id="camSplitter"></div>
+
+    <!-- Google Slides panel -->
+    <div id="slidesPanel">
+      <iframe id="slidesIframe" src="" allow="autoplay"></iframe>
+    </div>
+    <div id="slidesSplitter"></div>
 
     <!-- Banner shown when browser blocks remote audio playback -->
     <div id="audioUnlockBanner" onclick="dismissAudioBanner()" style="display:none;position:fixed;top:0;left:0;right:0;background:#fbbf24;color:#1e293b;text-align:center;padding:12px;font-weight:700;font-size:1rem;cursor:pointer;z-index:200">🔊 Click here to enable remote audio playback</div>
@@ -574,6 +632,8 @@
         } catch (e) { /* ignore */ }
         checkDrawEvent(d.draw_event);
         applyRemoteControl(d.dashboard_control);
+        // Slides: show button if slide_url is configured
+        updateSlideUrl(d.slide_url);
       } catch (e) { /* retry next tick */ }
     }
 
@@ -969,6 +1029,76 @@
     // Track last-known remote state so we only apply when admin actually changes it
     let lastRemote = {};
 
+    // ── Google Slides ─────────────────────────────
+    let slidesActive = false;
+    let slideUrl = '';
+    let currentSlide = 0;
+    let slideTotalPages = 0; // unknown from embed
+
+    function buildSlideEmbedUrl(url, page) {
+      // Convert a Google Slides share/edit URL to an embed URL at a specific page
+      // Accepted: /edit, /pub, /embed or raw URL
+      let base = url.replace(/\/(edit|pub|present)[^/]*(#.*)?$/, '');
+      base = base.replace(/\/embed[^/]*(#.*)?$/, '');
+      // Ensure it ends with /embed
+      if (!base.endsWith('/embed')) base += '/embed';
+      return base + '?start=false&loop=false&delayms=60000&slide=' + page;
+    }
+
+    function updateSlideUrl(url) {
+      const btn = document.getElementById('toggleSlidesBtn');
+      if (url) {
+        slideUrl = url;
+        if (btn) btn.style.display = '';
+      } else {
+        slideUrl = '';
+        if (btn) btn.style.display = 'none';
+        if (slidesActive) toggleSlides(); // close if no URL
+      }
+    }
+
+    function toggleSlides() {
+      slidesActive = !slidesActive;
+      const panel = document.getElementById('slidesPanel');
+      if (slidesActive && slideUrl) {
+        currentSlide = 0;
+        document.getElementById('slidesIframe').src = buildSlideEmbedUrl(slideUrl, currentSlide);
+        panel.classList.add('active');
+        document.body.classList.add('slides-active');
+      } else {
+        slidesActive = false;
+        panel.classList.remove('active');
+        document.body.classList.remove('slides-active');
+        document.getElementById('slidesIframe').src = '';
+      }
+      setToggleBtnState('toggleSlidesBtn', slidesActive);
+    }
+
+    function slidesNext() {
+      currentSlide++;
+      document.getElementById('slidesIframe').src = buildSlideEmbedUrl(slideUrl, currentSlide);
+    }
+
+    function slidesPrev() {
+      if (currentSlide > 0) currentSlide--;
+      document.getElementById('slidesIframe').src = buildSlideEmbedUrl(slideUrl, currentSlide);
+    }
+
+    // Draggable slides splitter
+    (function() {
+      const sp = document.getElementById('slidesSplitter');
+      let splitting = false;
+      function onStart() { splitting = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; }
+      function onMove(cx) { if (!splitting) return; var p = Math.min(90, Math.max(30, (cx / window.innerWidth) * 100)); document.documentElement.style.setProperty('--slides-split', p + '%'); }
+      function onEnd() { splitting = false; document.body.style.cursor = ''; document.body.style.userSelect = ''; }
+      sp.addEventListener('mousedown', function(e) { onStart(); e.preventDefault(); });
+      document.addEventListener('mousemove', function(e) { onMove(e.clientX); });
+      document.addEventListener('mouseup', onEnd);
+      sp.addEventListener('touchstart', function(e) { onStart(); }, { passive: true });
+      document.addEventListener('touchmove', function(e) { if (splitting) onMove(e.touches[0].clientX); }, { passive: true });
+      document.addEventListener('touchend', onEnd);
+    })();
+
     // Auto-unlock audio on first user interaction so remote commands work
     function tryUnlockAudio() {
       if (audioEl.src) {
@@ -1041,6 +1171,14 @@
           toggleWebcam();
         }
       }
+      // Remote slides toggle
+      if (ctrl.slides_visible !== undefined && ctrl.slides_visible !== lastRemote.slides_visible) {
+        if (ctrl.slides_visible && !slidesActive && slideUrl) {
+          toggleSlides();
+        } else if (!ctrl.slides_visible && slidesActive) {
+          toggleSlides();
+        }
+      }
       // Apply repeat state only when remote changes
       if (ctrl.repeat_one !== undefined && ctrl.repeat_one !== lastRemote.repeat_one) {
         repeatOne = ctrl.repeat_one;
@@ -1097,6 +1235,7 @@
         series_visible: ctrl.series_visible,
         qr_visible: ctrl.qr_visible,
         cam_visible: ctrl.cam_visible,
+        slides_visible: ctrl.slides_visible,
         repeat_one: ctrl.repeat_one
       };
     }
