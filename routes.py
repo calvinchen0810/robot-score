@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
+from sqlalchemy import inspect
 from typing import List, Optional
 import json
 import hashlib
@@ -58,6 +59,14 @@ def _ensure_admin_password(db: Session):
     if not row:
         db.add(AdminSetting(key="admin_password", value=_hash_pw(_DEFAULT_PASSWORD)))
         db.commit()
+
+
+def _ensure_admin_macros_table(db: Session):
+    """Create admin_macros table on demand for deployments where migration hasn't run yet."""
+    bind = db.get_bind()
+    inspector = inspect(bind)
+    if "admin_macros" not in inspector.get_table_names():
+        AdminMacro.__table__.create(bind=bind, checkfirst=True)
 
 
 def _require_admin(x_admin_token: Optional[str] = Header(None)):
@@ -1045,6 +1054,7 @@ def update_song(sid: int, data: SongCreate, db: Session = Depends(get_db)):
 @router.get("/admin/macros")
 def get_all_macros(db: Session = Depends(get_db), _auth=Depends(_require_admin)):
     """Get all saved macros from database."""
+    _ensure_admin_macros_table(db)
     macros = db.query(AdminMacro).order_by(AdminMacro.slot_number).all()
     result = {}
     for m in macros:
@@ -1070,6 +1080,7 @@ def save_macro(slot_number: int, data: dict, db: Session = Depends(get_db), _aut
     """Save or update macro in database."""
     if slot_number < 0 or slot_number > 3:
         raise HTTPException(400, "Slot number must be 0-3")
+    _ensure_admin_macros_table(db)
     
     macro = db.query(AdminMacro).filter(AdminMacro.slot_number == slot_number).first()
     if not macro:
@@ -1112,6 +1123,7 @@ def get_macro(slot_number: int, db: Session = Depends(get_db), _auth=Depends(_re
     """Get specific macro from database."""
     if slot_number < 0 or slot_number > 3:
         raise HTTPException(400, "Slot number must be 0-3")
+    _ensure_admin_macros_table(db)
     
     macro = db.query(AdminMacro).filter(AdminMacro.slot_number == slot_number).first()
     if not macro:
@@ -1138,6 +1150,7 @@ def delete_macro(slot_number: int, db: Session = Depends(get_db), _auth=Depends(
     """Delete macro from database."""
     if slot_number < 0 or slot_number > 3:
         raise HTTPException(400, "Slot number must be 0-3")
+    _ensure_admin_macros_table(db)
     
     macro = db.query(AdminMacro).filter(AdminMacro.slot_number == slot_number).first()
     if macro:
@@ -1151,6 +1164,7 @@ def delete_macro(slot_number: int, db: Session = Depends(get_db), _auth=Depends(
 @router.get("/admin/export")
 def export_database(db: Session = Depends(get_db), _auth=Depends(_require_admin)):
     """Export entire database as JSON."""
+    _ensure_admin_macros_table(db)
     data = {
         "series": [],
         "games": [],
@@ -1242,6 +1256,7 @@ def export_database(db: Session = Depends(get_db), _auth=Depends(_require_admin)
 @router.post("/admin/import")
 async def import_database(file: UploadFile = File(...), db: Session = Depends(get_db), _auth=Depends(_require_admin)):
     """Import database from JSON file, replacing all existing data."""
+    _ensure_admin_macros_table(db)
     content = await file.read()
     try:
         data = json.loads(content)
