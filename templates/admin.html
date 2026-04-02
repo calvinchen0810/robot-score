@@ -1064,13 +1064,19 @@
       statusEl.innerHTML = '<span style="color:#3b82f6">Importing…</span>';
       try {
         const res = await fetch('/api/admin/import', { method: 'POST', headers: authHeaders(), body: formData });
-        const data = await res.json();
+        const text = await res.text();
+        let data = null;
+        try {
+          data = text ? JSON.parse(text) : null;
+        } catch(e) {}
         if (res.ok) {
           statusEl.innerHTML = '<span style="color:#16a34a">✅ Import successful!</span>';
           fileInput.value = '';
           loadSeries();
+          loadDashControl();
         } else {
-          statusEl.innerHTML = '<span style="color:#dc2626">❌ ' + (data.detail || 'Import failed') + '</span>';
+          const detail = (data && data.detail) ? data.detail : (text || 'Import failed');
+          statusEl.innerHTML = '<span style="color:#dc2626">❌ ' + detail + '</span>';
         }
       } catch (e) {
         statusEl.innerHTML = '<span style="color:#dc2626">❌ Error: ' + e.message + '</span>';

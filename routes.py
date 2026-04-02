@@ -1251,93 +1251,103 @@ async def import_database(file: UploadFile = File(...), db: Session = Depends(ge
     required_keys = {"series", "games", "teams", "score_buttons", "team_scores", "songs"}
     if not required_keys.issubset(data.keys()):
         raise HTTPException(400, f"Missing keys. Required: {required_keys}")
+    for key in ("series", "games", "rounds", "teams", "score_buttons", "team_scores", "songs", "admin_settings", "admin_macros"):
+        if key in data and not isinstance(data[key], list):
+            raise HTTPException(400, f"Invalid format: '{key}' must be a list")
 
-    # Clear existing data in correct order (foreign key deps)
-    db.query(TeamScore).delete()
-    db.query(Round).delete()
-    db.query(Team).delete()
-    db.query(Game).delete()
-    db.query(ScoreButton).delete()
-    db.query(Song).delete()
-    db.query(Series).delete()
-    db.query(AdminMacro).delete()
-    db.flush()
+    try:
+        # Clear existing data in correct order (foreign key deps)
+        db.query(TeamScore).delete()
+        db.query(Round).delete()
+        db.query(Team).delete()
+        db.query(Game).delete()
+        db.query(ScoreButton).delete()
+        db.query(Song).delete()
+        db.query(Series).delete()
+        db.query(AdminMacro).delete()
+        db.flush()
 
-    for s in data["series"]:
-        db.add(Series(
-            id=s["id"], name=s["name"], is_active=s.get("is_active", True),
-            created_at=datetime.fromisoformat(s["created_at"]) if s.get("created_at") else datetime.utcnow(),
-        ))
-    db.flush()
-    for g in data["games"]:
-        db.add(Game(
-            id=g["id"], name=g["name"], series_id=g["series_id"],
-            is_active=g.get("is_active", False), status=g.get("status", "stopped"),
-            duration_seconds=g.get("duration_seconds"),
-            paused_remaining=g.get("paused_remaining"),
-            started_at=datetime.fromisoformat(g["started_at"]) if g.get("started_at") else None,
-            created_at=datetime.fromisoformat(g["created_at"]) if g.get("created_at") else datetime.utcnow(),
-        ))
-    db.flush()
-    for r in data.get("rounds", []):
-        db.add(Round(
-            id=r["id"], name=r["name"], game_id=r["game_id"],
-            round_number=r.get("round_number", 1), status=r.get("status", "stopped"),
-            duration_seconds=r.get("duration_seconds"),
-            paused_remaining=r.get("paused_remaining"),
-            started_at=datetime.fromisoformat(r["started_at"]) if r.get("started_at") else None,
-            created_at=datetime.fromisoformat(r["created_at"]) if r.get("created_at") else datetime.utcnow(),
-        ))
-    db.flush()
-    for b in data["score_buttons"]:
-        db.add(ScoreButton(
-            id=b["id"], label=b["label"], image_url=b.get("image_url"),
-            points=b.get("points", 1), max_clicks=b.get("max_clicks"),
-            max_clicks_game=b.get("max_clicks_game"),
-            display_order=b.get("display_order", 0),
-            is_active=b.get("is_active", True), series_id=b["series_id"],
-        ))
-    db.flush()
-    for t in data["teams"]:
-        db.add(Team(
-            id=t["id"], name=t["name"], game_id=t["game_id"],
-            start_order=t.get("start_order"),
-            created_at=datetime.fromisoformat(t["created_at"]) if t.get("created_at") else datetime.utcnow(),
-        ))
-    db.flush()
-    for ts in data["team_scores"]:
-        db.add(TeamScore(
-            id=ts["id"], team_id=ts["team_id"],
-            button_id=ts["button_id"], round_id=ts.get("round_id"),
-            clicks=ts.get("clicks", 0),
-        ))
-    for sg in data["songs"]:
-        db.add(Song(
-            id=sg["id"], title=sg["title"], url=sg["url"],
-            display_order=sg.get("display_order", 0), series_id=sg["series_id"],
-        ))
-    for a in data.get("admin_settings", []):
-        if a.get("key") == 'admin_password_hash':
-            continue  # never import password hash
-        existing = db.query(AdminSetting).filter(AdminSetting.key == a["key"]).first()
-        if existing:
-            existing.value = a["value"]
-        else:
-            db.add(AdminSetting(key=a["key"], value=a["value"]))
-    for m in data.get("admin_macros", []):
-        db.add(AdminMacro(
-            slot_number=m.get("slot_number", 0),
-            name=m.get("name"),
-            timer_visible=bool(m.get("timer_visible", False)),
-            game_rank_visible=bool(m.get("game_rank_visible", False)),
-            series_visible=bool(m.get("series_visible", False)),
-            qr_visible=bool(m.get("qr_visible", False)),
-            cam_visible=bool(m.get("cam_visible", False)),
-            slides_visible=bool(m.get("slides_visible", False)),
-            song_idx=m.get("song_idx"),
-            music_playing=bool(m.get("music_playing", False)),
-            created_at=datetime.fromisoformat(m["created_at"]) if m.get("created_at") else datetime.utcnow(),
-            updated_at=datetime.fromisoformat(m["updated_at"]) if m.get("updated_at") else datetime.utcnow(),
-        ))
-    db.commit()
-    return {"ok": True, "message": "Database imported successfully"}
+        for s in data["series"]:
+            db.add(Series(
+                id=s["id"], name=s["name"], is_active=s.get("is_active", True),
+                created_at=datetime.fromisoformat(s["created_at"]) if s.get("created_at") else datetime.utcnow(),
+            ))
+        db.flush()
+        for g in data["games"]:
+            db.add(Game(
+                id=g["id"], name=g["name"], series_id=g["series_id"],
+                is_active=g.get("is_active", False), status=g.get("status", "stopped"),
+                duration_seconds=g.get("duration_seconds"),
+                paused_remaining=g.get("paused_remaining"),
+                started_at=datetime.fromisoformat(g["started_at"]) if g.get("started_at") else None,
+                created_at=datetime.fromisoformat(g["created_at"]) if g.get("created_at") else datetime.utcnow(),
+            ))
+        db.flush()
+        for r in data.get("rounds", []):
+            db.add(Round(
+                id=r["id"], name=r["name"], game_id=r["game_id"],
+                round_number=r.get("round_number", 1), status=r.get("status", "stopped"),
+                duration_seconds=r.get("duration_seconds"),
+                paused_remaining=r.get("paused_remaining"),
+                started_at=datetime.fromisoformat(r["started_at"]) if r.get("started_at") else None,
+                created_at=datetime.fromisoformat(r["created_at"]) if r.get("created_at") else datetime.utcnow(),
+            ))
+        db.flush()
+        for b in data["score_buttons"]:
+            db.add(ScoreButton(
+                id=b["id"], label=b["label"], image_url=b.get("image_url"),
+                points=b.get("points", 1), max_clicks=b.get("max_clicks"),
+                max_clicks_game=b.get("max_clicks_game"),
+                display_order=b.get("display_order", 0),
+                is_active=b.get("is_active", True), series_id=b["series_id"],
+            ))
+        db.flush()
+        for t in data["teams"]:
+            db.add(Team(
+                id=t["id"], name=t["name"], game_id=t["game_id"],
+                start_order=t.get("start_order"),
+                created_at=datetime.fromisoformat(t["created_at"]) if t.get("created_at") else datetime.utcnow(),
+            ))
+        db.flush()
+        for ts in data["team_scores"]:
+            db.add(TeamScore(
+                id=ts["id"], team_id=ts["team_id"],
+                button_id=ts["button_id"], round_id=ts.get("round_id"),
+                clicks=ts.get("clicks", 0),
+            ))
+        for sg in data["songs"]:
+            db.add(Song(
+                id=sg["id"], title=sg["title"], url=sg["url"],
+                display_order=sg.get("display_order", 0), series_id=sg["series_id"],
+            ))
+        for a in data.get("admin_settings", []):
+            if a.get("key") == 'admin_password_hash':
+                continue  # never import password hash
+            existing = db.query(AdminSetting).filter(AdminSetting.key == a["key"]).first()
+            if existing:
+                existing.value = a["value"]
+            else:
+                db.add(AdminSetting(key=a["key"], value=a["value"]))
+        for m in data.get("admin_macros", []):
+            db.add(AdminMacro(
+                slot_number=m.get("slot_number", 0),
+                name=m.get("name"),
+                timer_visible=bool(m.get("timer_visible", False)),
+                game_rank_visible=bool(m.get("game_rank_visible", False)),
+                series_visible=bool(m.get("series_visible", False)),
+                qr_visible=bool(m.get("qr_visible", False)),
+                cam_visible=bool(m.get("cam_visible", False)),
+                slides_visible=bool(m.get("slides_visible", False)),
+                song_idx=m.get("song_idx"),
+                music_playing=bool(m.get("music_playing", False)),
+                created_at=datetime.fromisoformat(m["created_at"]) if m.get("created_at") else datetime.utcnow(),
+                updated_at=datetime.fromisoformat(m["updated_at"]) if m.get("updated_at") else datetime.utcnow(),
+            ))
+        db.commit()
+        return {"ok": True, "message": "Database imported successfully"}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(400, f"Import failed: {str(exc)}")
