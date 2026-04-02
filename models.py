@@ -105,3 +105,21 @@ class AdminSetting(Base):
     id = Column(Integer, primary_key=True, index=True)
     key = Column(String(100), unique=True, nullable=False)
     value = Column(String(500), nullable=False)
+
+
+class AdminMacro(Base):
+    __tablename__ = "admin_macros"
+
+    id = Column(Integer, primary_key=True, index=True)
+    slot_number = Column(Integer, nullable=False)  # 0, 1, 2, 3
+    name = Column(String(100), nullable=True)  # Optional macro name
+    timer_visible = Column(Boolean, default=False)
+    game_rank_visible = Column(Boolean, default=False)
+    series_visible = Column(Boolean, default=False)
+    qr_visible = Column(Boolean, default=False)
+    cam_visible = Column(Boolean, default=False)
+    slides_visible = Column(Boolean, default=False)
+    song_idx = Column(Integer, nullable=True)
+    music_playing = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

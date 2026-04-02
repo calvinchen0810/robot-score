@@ -20,15 +20,32 @@
   <!-- ═══ ADMIN PANEL (hidden until login) ═══════════ -->
   <!-- Dashboard Remote: Top toolbar (fixed) -->
   <div id="rcToggleBar" style="display:none;position:fixed;top:0;left:0;right:0;background:#f8fafc;border-bottom:2px solid #e2e8f0;padding:8px 16px;z-index:100">
-    <div style="max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:4px;flex-wrap:nowrap">
-      <span style="font-weight:700;font-size:0.75rem;color:#64748b;margin-right:2px">📺</span>
-      <button id="rcTimerBtn" onclick="rcToggle('timer_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 8px;border-radius:8px;font-size:0.95rem;cursor:pointer" title="Timer">⏱</button>
-      <button id="rcGameBtn" onclick="rcToggle('game_rank_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 8px;border-radius:8px;font-size:0.95rem;cursor:pointer" title="Game Ranking">🏁</button>
-      <button id="rcSeriesBtn" onclick="rcToggle('series_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 8px;border-radius:8px;font-size:0.95rem;cursor:pointer" title="Series Ranking">🏆</button>
-      <button id="rcQrBtn" onclick="rcToggle('qr_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 8px;border-radius:8px;font-size:0.95rem;cursor:pointer" title="QR Code">🔗</button>
-      <button id="rcCamBtn" onclick="rcToggle('cam_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 8px;border-radius:8px;font-size:0.95rem;cursor:pointer" title="Camera">📷</button>
-      <button id="rcSlidesBtn" onclick="rcToggle('slides_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 8px;border-radius:8px;font-size:0.95rem;cursor:pointer" title="Slides">📊</button>
+    <div style="max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:nowrap">
+      <div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap">
+        <span style="font-weight:700;font-size:0.75rem;color:#64748b;margin-right:2px">📺</span>
+        <button id="rcTimerBtn" onclick="rcToggle('timer_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 8px;border-radius:8px;font-size:0.95rem;cursor:pointer" title="Timer">⏱</button>
+        <button id="rcGameBtn" onclick="rcToggle('game_rank_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 8px;border-radius:8px;font-size:0.95rem;cursor:pointer" title="Game Ranking">🏅</button>
+        <button id="rcSeriesBtn" onclick="rcToggle('series_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 8px;border-radius:8px;font-size:0.95rem;cursor:pointer" title="Series Ranking">🏆</button>
+        <button id="rcQrBtn" onclick="rcToggle('qr_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 8px;border-radius:8px;font-size:0.95rem;cursor:pointer" title="QR Code">🏁</button>
+        <button id="rcCamBtn" onclick="rcToggle('cam_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 8px;border-radius:8px;font-size:0.95rem;cursor:pointer" title="Camera">📷</button>
+        <button id="rcSlidesBtn" onclick="rcToggle('slides_visible')" style="background:#e2e8f0;color:#334155;border:none;padding:5px 8px;border-radius:8px;font-size:0.95rem;cursor:pointer" title="Slides">📊</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;margin-left:8px">
+        <button id="mcBtn0" onclick="macroClick(0)" oncontextmenu="openMacroMenu(0,event)" style="background:#e2e8f0;color:#334155;border:none;padding:5px 8px;border-radius:8px;font-size:0.95rem;font-weight:600;cursor:pointer;min-width:32px" title="Click: Load/Save · Right-click: Options">0</button>
+        <button id="mcBtn1" onclick="macroClick(1)" oncontextmenu="openMacroMenu(1,event)" style="background:#e2e8f0;color:#334155;border:none;padding:5px 8px;border-radius:8px;font-size:0.95rem;font-weight:600;cursor:pointer;min-width:32px" title="Click: Load/Save · Right-click: Options">1</button>
+        <button id="mcBtn2" onclick="macroClick(2)" oncontextmenu="openMacroMenu(2,event)" style="background:#e2e8f0;color:#334155;border:none;padding:5px 8px;border-radius:8px;font-size:0.95rem;font-weight:600;cursor:pointer;min-width:32px" title="Click: Load/Save · Right-click: Options">2</button>
+        <button id="mcBtn3" onclick="macroClick(3)" oncontextmenu="openMacroMenu(3,event)" style="background:#e2e8f0;color:#334155;border:none;padding:5px 8px;border-radius:8px;font-size:0.95rem;font-weight:600;cursor:pointer;min-width:32px" title="Click: Load/Save · Right-click: Options">3</button>
+      </div>
     </div>
+  </div>
+
+  <!-- Macro context menu -->
+  <div id="macroContextMenu" style="display:none;position:fixed;z-index:9999;background:#1e293b;border:1px solid #334155;border-radius:10px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,0.35);min-width:160px">
+    <div id="macroMenuSlotLabel" style="font-size:0.7rem;color:#94a3b8;font-weight:700;padding:6px 12px 4px;text-transform:uppercase;letter-spacing:.04em">Macro 0</div>
+    <button onclick="macroMenuLoad()" style="display:block;width:100%;text-align:left;background:none;border:none;color:#e2e8f0;padding:7px 14px;border-radius:7px;font-size:0.85rem;cursor:pointer" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='none'">▶ Load</button>
+    <button onclick="macroMenuUpdate()" style="display:block;width:100%;text-align:left;background:none;border:none;color:#e2e8f0;padding:7px 14px;border-radius:7px;font-size:0.85rem;cursor:pointer" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='none'">💾 Save / Update</button>
+    <div style="border-top:1px solid #334155;margin:4px 0"></div>
+    <button onclick="macroMenuClear()" style="display:block;width:100%;text-align:left;background:none;border:none;color:#f87171;padding:7px 14px;border-radius:7px;font-size:0.85rem;cursor:pointer" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='none'">🗑 Clear</button>
   </div>
 
   <!-- Dashboard Remote: Bottom music bar (fixed) -->
@@ -174,7 +191,7 @@
         <div id="importStatus" class="mt-2"></div>
       </div>
       <div class="card">
-        <h3>🔗 QR Code (Dashboard)</h3>
+        <h3>🏁 QR Code (Dashboard)</h3>
         <p class="text-sm text-muted mb-2">Set a QR image URL to show on the dashboard (optional).</p>
         <label>QR Image URL</label>
         <input type="url" id="qrUrl" placeholder="https://.../qr.png">
@@ -896,6 +913,7 @@
       document.getElementById('adminPanel').style.display = '';
       document.getElementById('rcToggleBar').style.display = '';
       document.getElementById('rcMusicBar').style.display = '';
+      updateMacroButtons();
       loadSeries();
       loadAdminSettings();
     }
@@ -959,6 +977,10 @@
             const d3 = await r3.json();
             if (d3.slide_url) document.getElementById('slideUrl').value = d3.slide_url;
           }
+        } catch(e) {}
+        // load macros from database
+        try {
+          await loadMacrosFromDB();
         } catch(e) {}
       } catch(e) {}
     }
@@ -1073,6 +1095,7 @@
         if (!res.ok) return;
         rcState = await res.json();
         updateRcButtons();
+        updateMacroButtons();
       } catch(e) {}
     }
 
@@ -1118,6 +1141,188 @@
         btn.style.background = '#e2e8f0';
         btn.style.color = '#334155';
         btn.style.fontWeight = '600';
+      }
+    }
+
+    const MACRO_BUTTONS = ['timer_visible', 'game_rank_visible', 'series_visible', 'qr_visible', 'cam_visible', 'slides_visible'];
+
+    function saveMacro(n) {
+      const state = {};
+      MACRO_BUTTONS.forEach(key => {
+        state[key] = rcState[key] || false;
+      });
+      // Also save current playing song index and play state
+      state.song_idx = rcCurrentIdx || 0;
+      state.music_playing = rcPlaying || false;
+      // Save to localStorage for backup
+      localStorage.setItem('admin_macro_' + n, JSON.stringify(state));
+      // Save to database
+      fetch('/api/admin/macros/' + n, {
+        method: 'POST',
+        headers: Object.assign({'Content-Type':'application/json'}, authHeaders()),
+        body: JSON.stringify(state)
+      }).catch(e => console.error('Failed to save macro to DB:', e));
+      _macroCache[n] = true;
+      updateMacroButtons();
+    }
+
+    async function loadMacro(n) {
+      let state = null;
+      
+      // Try to load from database first
+      try {
+        const response = await fetch('/api/admin/macros/' + n, {
+          headers: authHeaders()
+        });
+        if (response.ok) {
+          state = await response.json();
+        }
+      } catch(e) {
+        console.log('Could not load macro from DB, trying localStorage');
+      }
+      
+      // Fallback to localStorage
+      if (!state) {
+        const saved = localStorage.getItem('admin_macro_' + n);
+        if (!saved) return;
+        state = JSON.parse(saved);
+      }
+      localStorage.setItem('admin_macro_' + n, JSON.stringify(state));
+      _macroCache[n] = true;
+      
+      MACRO_BUTTONS.forEach(key => {
+        if (state.hasOwnProperty(key)) {
+          rcState[key] = state[key];
+        }
+      });
+      updateRcButtons();
+      // Restore song regardless of play state
+      if (state.song_idx !== undefined && rcSongList.length > 0) {
+        rcCurrentIdx = Math.min(state.song_idx, rcSongList.length - 1);
+        rcUpdateDisplay();
+        if (state.music_playing) {
+          // Was playing: restore and play
+          rcMusicAt('play', rcCurrentIdx);
+          rcPlaying = true;
+          const pb = document.getElementById('rcPlayBtn');
+          if (pb) pb.textContent = '\u23f8';
+        } else {
+          // Was stopped: restore but set paused state
+          rcMusic('pause');
+          rcPlaying = false;
+          const pb = document.getElementById('rcPlayBtn');
+          if (pb) pb.textContent = '\u25b6';
+        }
+      }
+      try {
+        await fetch('/api/admin/dashboard_control', {
+          method: 'PUT',
+          headers: Object.assign({'Content-Type':'application/json'}, authHeaders()),
+          body: JSON.stringify(state)
+        });
+      } catch(e) {}
+    }
+
+    // Macro context menu state
+    let _macroMenuSlot = null;
+
+    function openMacroMenu(n, event) {
+      event.preventDefault();
+      _macroMenuSlot = n;
+      const menu = document.getElementById('macroContextMenu');
+      const label = document.getElementById('macroMenuSlotLabel');
+      const loadBtn = menu.querySelectorAll('button')[0];
+      const isSaved = _macroCache[n] || localStorage.getItem('admin_macro_' + n);
+      label.textContent = 'Macro ' + n + (isSaved ? ' ✓' : ' (empty)');
+      // Disable Load if empty
+      loadBtn.disabled = !isSaved;
+      loadBtn.style.opacity = isSaved ? '1' : '0.4';
+      loadBtn.style.cursor = isSaved ? 'pointer' : 'default';
+      // Position near cursor, keep within viewport
+      const x = Math.min(event.clientX, window.innerWidth - 180);
+      const y = Math.min(event.clientY, window.innerHeight - 160);
+      menu.style.left = x + 'px';
+      menu.style.top = y + 'px';
+      menu.style.display = 'block';
+    }
+
+    function closeMacroMenu() {
+      document.getElementById('macroContextMenu').style.display = 'none';
+      _macroMenuSlot = null;
+    }
+
+    function macroMenuLoad() {
+      closeMacroMenu();
+      if (_macroMenuSlot === null) return;
+      loadMacro(_macroMenuSlot);
+    }
+
+    function macroMenuUpdate() {
+      const n = _macroMenuSlot;
+      closeMacroMenu();
+      if (n === null) return;
+      saveMacro(n);
+    }
+
+    function macroMenuClear() {
+      const n = _macroMenuSlot;
+      closeMacroMenu();
+      if (n === null) return;
+      localStorage.removeItem('admin_macro_' + n);
+      delete _macroCache[n];
+      fetch('/api/admin/macros/' + n, {
+        method: 'DELETE',
+        headers: authHeaders()
+      }).catch(e => console.error('Failed to clear macro from DB:', e));
+      updateMacroButtons();
+    }
+
+    function macroClick(n) {
+      const saved = _macroCache[n] || localStorage.getItem('admin_macro_' + n);
+      if (saved) {
+        loadMacro(n);
+      } else {
+        saveMacro(n);
+      }
+      updateMacroButtons();
+    }
+
+    let _macroCache = {}; // Cache macro status from DB
+
+    function updateMacroButtons() {
+      for (let n = 0; n <= 3; n++) {
+        const btn = document.getElementById('mcBtn' + n);
+        if (!btn) continue;
+        const saved = _macroCache[n] || localStorage.getItem('admin_macro_' + n);
+        if (saved) {
+          btn.style.background = '#10b981';
+          btn.style.color = '#ffffff';
+          btn.style.fontWeight = '700';
+        } else {
+          btn.style.background = '#e2e8f0';
+          btn.style.color = '#334155';
+          btn.style.fontWeight = '600';
+        }
+      }
+    }
+
+    async function loadMacrosFromDB() {
+      try {
+        const response = await fetch('/api/admin/macros', {
+          headers: authHeaders()
+        });
+        if (response.ok) {
+          const macros = await response.json();
+          // Cache whether each slot has a macro
+          for (let n = 0; n <= 3; n++) {
+            if (macros[n]) {
+              _macroCache[n] = true;
+            }
+          }
+          updateMacroButtons();
+        }
+      } catch(e) {
+        console.log('Could not load macros from DB');
       }
     }
 
@@ -1310,6 +1515,15 @@
     // Load dashboard control state on admin init and poll every 3s
     loadDashControl();
     setInterval(() => { if (adminToken) loadDashControl(); }, 3000);
+
+    // Close macro context menu when clicking outside
+    document.addEventListener('click', function(e) {
+      const menu = document.getElementById('macroContextMenu');
+      if (menu && !menu.contains(e.target) && !e.target.closest('[id^="mcBtn"]')) {
+        menu.style.display = 'none';
+        _macroMenuSlot = null;
+      }
+    });
   </script>
 </body>
 </html>

@@ -9,7 +9,7 @@ import secrets
 import random
 
 from database import get_db
-from models import Series, Game, Round, Team, ScoreButton, TeamScore, Song, AdminSetting
+from models import Series, Game, Round, Team, ScoreButton, TeamScore, Song, AdminSetting, AdminMacro
 from schemas import (
     SeriesCreate, SeriesOut,
     GameCreate, GameUpdate, GameOut,
@@ -1041,6 +1041,111 @@ def update_song(sid: int, data: SongCreate, db: Session = Depends(get_db)):
     return s
 
 
+# ── Admin Macros ─────────────────────────────────────────
+@router.get("/admin/macros")
+def get_all_macros(db: Session = Depends(get_db), _auth=Depends(_require_admin)):
+    """Get all saved macros from database."""
+    macros = db.query(AdminMacro).order_by(AdminMacro.slot_number).all()
+    result = {}
+    for m in macros:
+        result[str(m.slot_number)] = {
+            "slot_number": m.slot_number,
+            "name": m.name,
+            "timer_visible": m.timer_visible,
+            "game_rank_visible": m.game_rank_visible,
+            "series_visible": m.series_visible,
+            "qr_visible": m.qr_visible,
+            "cam_visible": m.cam_visible,
+            "slides_visible": m.slides_visible,
+            "song_idx": m.song_idx,
+            "music_playing": m.music_playing,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+            "updated_at": m.updated_at.isoformat() if m.updated_at else None,
+        }
+    return result
+
+
+@router.post("/admin/macros/{slot_number}")
+def save_macro(slot_number: int, data: dict, db: Session = Depends(get_db), _auth=Depends(_require_admin)):
+    """Save or update macro in database."""
+    if slot_number < 0 or slot_number > 3:
+        raise HTTPException(400, "Slot number must be 0-3")
+    
+    macro = db.query(AdminMacro).filter(AdminMacro.slot_number == slot_number).first()
+    if not macro:
+        macro = AdminMacro(slot_number=slot_number)
+        db.add(macro)
+    
+    # Update fields from request data
+    macro.name = data.get('name')
+    macro.timer_visible = bool(data.get('timer_visible', False))
+    macro.game_rank_visible = bool(data.get('game_rank_visible', False))
+    macro.series_visible = bool(data.get('series_visible', False))
+    macro.qr_visible = bool(data.get('qr_visible', False))
+    macro.cam_visible = bool(data.get('cam_visible', False))
+    macro.slides_visible = bool(data.get('slides_visible', False))
+    macro.song_idx = data.get('song_idx')
+    macro.music_playing = bool(data.get('music_playing', False))
+    macro.updated_at = datetime.now(timezone.utc)
+    
+    db.commit()
+    db.refresh(macro)
+    return {
+        "ok": True,
+        "macro": {
+            "slot_number": macro.slot_number,
+            "name": macro.name,
+            "timer_visible": macro.timer_visible,
+            "game_rank_visible": macro.game_rank_visible,
+            "series_visible": macro.series_visible,
+            "qr_visible": macro.qr_visible,
+            "cam_visible": macro.cam_visible,
+            "slides_visible": macro.slides_visible,
+            "song_idx": macro.song_idx,
+            "music_playing": macro.music_playing,
+        }
+    }
+
+
+@router.get("/admin/macros/{slot_number}")
+def get_macro(slot_number: int, db: Session = Depends(get_db), _auth=Depends(_require_admin)):
+    """Get specific macro from database."""
+    if slot_number < 0 or slot_number > 3:
+        raise HTTPException(400, "Slot number must be 0-3")
+    
+    macro = db.query(AdminMacro).filter(AdminMacro.slot_number == slot_number).first()
+    if not macro:
+        raise HTTPException(404, "Macro not found")
+    
+    return {
+        "slot_number": macro.slot_number,
+        "name": macro.name,
+        "timer_visible": macro.timer_visible,
+        "game_rank_visible": macro.game_rank_visible,
+        "series_visible": macro.series_visible,
+        "qr_visible": macro.qr_visible,
+        "cam_visible": macro.cam_visible,
+        "slides_visible": macro.slides_visible,
+        "song_idx": macro.song_idx,
+        "music_playing": macro.music_playing,
+        "created_at": macro.created_at.isoformat() if macro.created_at else None,
+        "updated_at": macro.updated_at.isoformat() if macro.updated_at else None,
+    }
+
+
+@router.delete("/admin/macros/{slot_number}")
+def delete_macro(slot_number: int, db: Session = Depends(get_db), _auth=Depends(_require_admin)):
+    """Delete macro from database."""
+    if slot_number < 0 or slot_number > 3:
+        raise HTTPException(400, "Slot number must be 0-3")
+    
+    macro = db.query(AdminMacro).filter(AdminMacro.slot_number == slot_number).first()
+    if macro:
+        db.delete(macro)
+        db.commit()
+    return {"ok": True}
+
+
 # ── Export / Import Database ──────────────────────────────
 
 @router.get("/admin/export")
@@ -1055,6 +1160,7 @@ def export_database(db: Session = Depends(get_db), _auth=Depends(_require_admin)
         "team_scores": [],
         "songs": [],
         "admin_settings": [],
+        "admin_macros": [],
     }
     for s in db.query(Series).all():
         data["series"].append({
@@ -1110,6 +1216,21 @@ def export_database(db: Session = Depends(get_db), _auth=Depends(_require_admin)
         data["admin_settings"].append({
             "id": a.id, "key": a.key, "value": a.value,
         })
+    for m in db.query(AdminMacro).order_by(AdminMacro.slot_number).all():
+        data["admin_macros"].append({
+            "slot_number": m.slot_number,
+            "name": m.name,
+            "timer_visible": m.timer_visible,
+            "game_rank_visible": m.game_rank_visible,
+            "series_visible": m.series_visible,
+            "qr_visible": m.qr_visible,
+            "cam_visible": m.cam_visible,
+            "slides_visible": m.slides_visible,
+            "song_idx": m.song_idx,
+            "music_playing": m.music_playing,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+            "updated_at": m.updated_at.isoformat() if m.updated_at else None,
+        })
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     return Response(
         content=json.dumps(data, indent=2, ensure_ascii=False),
@@ -1139,6 +1260,7 @@ async def import_database(file: UploadFile = File(...), db: Session = Depends(ge
     db.query(ScoreButton).delete()
     db.query(Song).delete()
     db.query(Series).delete()
+    db.query(AdminMacro).delete()
     db.flush()
 
     for s in data["series"]:
@@ -1202,5 +1324,20 @@ async def import_database(file: UploadFile = File(...), db: Session = Depends(ge
             existing.value = a["value"]
         else:
             db.add(AdminSetting(key=a["key"], value=a["value"]))
+    for m in data.get("admin_macros", []):
+        db.add(AdminMacro(
+            slot_number=m.get("slot_number", 0),
+            name=m.get("name"),
+            timer_visible=bool(m.get("timer_visible", False)),
+            game_rank_visible=bool(m.get("game_rank_visible", False)),
+            series_visible=bool(m.get("series_visible", False)),
+            qr_visible=bool(m.get("qr_visible", False)),
+            cam_visible=bool(m.get("cam_visible", False)),
+            slides_visible=bool(m.get("slides_visible", False)),
+            song_idx=m.get("song_idx"),
+            music_playing=bool(m.get("music_playing", False)),
+            created_at=datetime.fromisoformat(m["created_at"]) if m.get("created_at") else datetime.utcnow(),
+            updated_at=datetime.fromisoformat(m["updated_at"]) if m.get("updated_at") else datetime.utcnow(),
+        ))
     db.commit()
     return {"ok": True, "message": "Database imported successfully"}
