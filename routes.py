@@ -46,6 +46,7 @@ _dashboard_control: dict = {
     "plan_timer_cmd_ts": None,
     "plan_timer_min": 10,
     "plan_timer_sec": 0,
+    "draw_dismiss_ts": None,
 }
 
 
@@ -201,6 +202,8 @@ def update_dashboard_control(data: dict, _auth=Depends(_require_admin)):
             _dashboard_control["music_song_idx"] = data["music_song_idx"]
         else:
             _dashboard_control["music_song_idx"] = None
+    if data.get("draw_cmd") == "dismiss":
+        _dashboard_control["draw_dismiss_ts"] = datetime.now(timezone.utc).isoformat()
     return _dashboard_control
 
 

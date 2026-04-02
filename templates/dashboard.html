@@ -1037,6 +1037,7 @@
     // ── Remote dashboard control from admin ──────────
     let lastMusicCmdTs = null;
     let lastPlanTimerCmdTs = null;
+    let lastDrawDismissTs = null;
     let pendingPlay = false;
     // Track last-known remote state so we only apply when admin actually changes it
     let lastRemote = {};
@@ -1238,6 +1239,14 @@
           nextSong();
         } else if (ctrl.music_cmd === 'prev') {
           prevSong();
+        }
+      }
+      // Dismiss draw overlay when admin closes randomize popup (one-time)
+      if (ctrl.draw_dismiss_ts && ctrl.draw_dismiss_ts !== lastDrawDismissTs) {
+        lastDrawDismissTs = ctrl.draw_dismiss_ts;
+        const overlay = document.getElementById('drawOverlay');
+        if (overlay && overlay.classList.contains('active')) {
+          dismissDraw();
         }
       }
       // Snapshot the remote state so next poll only reacts to actual remote changes

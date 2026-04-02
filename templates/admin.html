@@ -577,6 +577,12 @@
       try {
         await api('/api/games/' + gid + '/randomize', { method:'POST' });
         alert('Start order randomized!');
+        // After admin closes the popup, tell dashboard to close draw overlay if open.
+        await fetch('/api/admin/dashboard_control', {
+          method: 'PUT',
+          headers: Object.assign({'Content-Type':'application/json'}, authHeaders()),
+          body: JSON.stringify({ draw_cmd: 'dismiss' })
+        });
         loadGames(sid);
       } catch(e) { alert(e.message); }
     }
