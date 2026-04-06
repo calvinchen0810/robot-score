@@ -862,10 +862,15 @@ def dashboard_data(db: Session = Depends(get_db)):
                     "clicks": sc_data["clicks"],
                     "points": sc_data["points"],
                 })
-            tiebreaker = tuple(
-                scored.get(b.id, {"clicks": 0})["clicks"]
-                for b in sorted(buttons, key=lambda b: b.display_order, reverse=True)
+            # Tiebreaker 1: sum of display_order * clicks, bigger wins
+            tie1 = sum(
+                b.display_order * scored.get(b.id, {"clicks": 0})["clicks"]
+                for b in buttons
             )
+            # Tiebreaker 2: start_order, smaller wins (negate for reverse sort)
+            tie2 = -(t.start_order if t.start_order is not None else 999999)
+            # Tiebreaker 3: series_id, smaller wins (negate for reverse sort)
+            tie3 = -(t.game.series_id if t.game and t.game.series_id is not None else 999999)
             ranking.append({
                 "team_id": t.id,
                 "team_name": t.name,
@@ -874,11 +879,15 @@ def dashboard_data(db: Session = Depends(get_db)):
                 "start_order": t.start_order,
                 "total_points": total,
                 "details": details,
-                "_tiebreaker": tiebreaker,
+                "_tie1": tie1,
+                "_tie2": tie2,
+                "_tie3": tie3,
             })
-        ranking.sort(key=lambda x: (x["total_points"], x["_tiebreaker"]), reverse=True)
+        ranking.sort(key=lambda x: (x["total_points"], x["_tie1"], x["_tie2"], x["_tie3"]), reverse=True)
         for r in ranking:
-            del r["_tiebreaker"]
+            del r["_tie1"]
+            del r["_tie2"]
+            del r["_tie3"]
         return ranking
 
     game_ranking = []
