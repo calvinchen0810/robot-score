@@ -6,8 +6,15 @@
   <title>Robot Score – Dashboard</title>
   <link rel="stylesheet" href="/static/style.css">
   <style>
+    :root { --music-player-height: 0px; }
     body { background: #ffffff; }
-    .dashboard-wrap { max-width: 1100px; margin: 0 auto; padding: 20px 24px; padding-top: 56px; }
+    .dashboard-wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px 24px;
+      padding-top: 56px;
+      padding-bottom: calc(20px + var(--music-player-height));
+    }
     .section-title {
       font-size: 1.1rem; color: #64748b; text-transform: uppercase;
       letter-spacing: 1px; margin: 28px 0 12px; border-bottom: 1px solid #e2e8f0;
@@ -238,7 +245,7 @@
 
     /* Ranking / timer panel (right side) when webcam maximized */
     body.cam-maximized .dashboard-wrap {
-      position: fixed; top: 46px; right: 0; bottom: 60px;
+      position: fixed; top: 46px; right: 0; bottom: var(--music-player-height, 60px);
       left: var(--cam-split, 75%);
       width: auto; z-index: 55;
       padding: 12px 16px; margin: 0; max-width: none;
@@ -289,7 +296,7 @@
 
     /* Ranking / timer panel (right side) when slides active */
     body.slides-active .dashboard-wrap {
-      position: fixed; top: 46px; right: 0; bottom: 60px;
+      position: fixed; top: 46px; right: 0; bottom: var(--music-player-height, 60px);
       left: var(--slides-split, 75%);
       width: auto; z-index: 55;
       padding: 12px 16px; margin: 0; max-width: none;
@@ -696,10 +703,19 @@
     let currentSongIdx = -1;
     const audioEl = document.getElementById('audioEl');
 
+    function syncMusicPlayerInset() {
+      const player = document.getElementById('musicPlayer');
+      if (!player) return;
+      const visible = window.getComputedStyle(player).display !== 'none';
+      const inset = visible ? player.offsetHeight : 0;
+      document.documentElement.style.setProperty('--music-player-height', inset + 'px');
+    }
+
     function updateSongList(songs) {
       if (!songs || !songs.length) {
         document.getElementById('musicPlayer').style.display = 'none';
         songList = [];
+        syncMusicPlayerInset();
         return;
       }
       document.getElementById('musicPlayer').style.display = '';
@@ -714,6 +730,7 @@
         }
         renderSongListPanel();
       }
+      syncMusicPlayerInset();
     }
 
     // QR panel functions (controlled from top toolbar button)
@@ -795,6 +812,7 @@
     function toggleMusicPanel() {
       const el = document.getElementById('songListPanel');
       el.style.display = el.style.display === 'none' ? '' : 'none';
+      syncMusicPlayerInset();
     }
 
     let repeatOne = true;
@@ -961,6 +979,8 @@
       repeatBtnEl.style.background = '#dbeafe';
       repeatBtnEl.style.borderRadius = '6px';
     }
+    syncMusicPlayerInset();
+    window.addEventListener('resize', syncMusicPlayerInset);
 
     // ── Webcam preview ─────────────────────────────
     let webcamStream = null;
