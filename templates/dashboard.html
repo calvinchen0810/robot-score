@@ -340,7 +340,6 @@
 
   <div class="dashboard-wrap">
     <div class="dashboard-header">
-      <h1 id="seriesName">🤖 Robot Score</h1>
       <div id="gameBadge"></div>
       <!-- Planning countdown timer (visible when game not running) -->
       <div id="planningTimer" style="display:none;margin-top:12px;text-align:center">
@@ -541,7 +540,7 @@
 
         return '<div class="' + rowClass + '">'
           + '<div class="rank-pos">' + posText + '</div>'
-          + '<div class="rank-name"><span>' + esc(r.team_name) + changeHtml + '</span>' + ((r.start_order || r.game_name) ? '<span class="rank-sub-tags">' + (r.start_order ? '<span class="game-tag rank-start-order">起點 #' + r.start_order + '</span>' : '') + gameTag + '</span>' : '') + '</div>'
+          + '<div class="rank-name"><span>' + esc(r.team_name) + changeHtml + '</span>' + ((r.start_order || r.game_name) ? '<span class="rank-sub-tags">' + (r.start_order ? '<span class="game-tag rank-start-order">起點 ' + String.fromCharCode(64 + r.start_order) + '</span>' : '') + gameTag + '</span>' : '') + '</div>'
           + '<div class="rank-detail">' + details + '</div>'
           + '<div class="rank-score">' + r.total_points + '</div>'
           + '</div>';
@@ -639,7 +638,6 @@
         document.getElementById('noData').style.display = 'none';
         document.getElementById('content').style.display = '';
         document.getElementById('toggleBar').style.display = '';
-        document.getElementById('seriesName').textContent = '🤖 ' + d.series.name;
         const timerTarget = document.getElementById('timerPanel');
         if (d.active_round) {
           const statusTag = d.active_round.status === 'paused'
@@ -875,7 +873,7 @@
 
         const numEl = document.getElementById('drawNum' + i);
         const intv = setInterval(() => {
-          if (numEl) numEl.textContent = '#' + (Math.floor(Math.random() * count) + 1);
+          if (numEl) numEl.textContent = String.fromCharCode(65 + Math.floor(Math.random() * count));
         }, 80);
         shuffleIntervals.push(intv);
       });
@@ -887,7 +885,7 @@
           clearInterval(shuffleIntervals[i]);
           const card = document.getElementById('drawCard' + i);
           const numEl = document.getElementById('drawNum' + i);
-          if (numEl) numEl.textContent = '起點 #' + r.start_order;
+          if (numEl) numEl.textContent = '起點 ' + String.fromCharCode(64 + r.start_order);
           if (card) {
             card.classList.remove('shuffling');
             card.classList.add('revealed');
